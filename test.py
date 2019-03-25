@@ -14,12 +14,16 @@ import os
   1. In pyTorch-1.0.1, torch.autograd.Variable is deprecated, the function Variable(tensor) return tensors
 """
 
+verbose = False
+
 from model.rpnet import Net
 
 parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
 parser.add_argument("--rb", type=int, default=13, help="number of residual blocks")
 parser.add_argument("--checkpoint", type=str, default="./model/I-HAZE_O-HAZE.pth", help="path to load model checkpoint")
 parser.add_argument("--test", type=str, default="./dataset/reside/SOTS/indoor/hazy", help="path to load test images")
+parser.add_argument("--output", type=str, default="./output", help="path to save output images")
+parser.add_argument("--verbose", type=str, action="store_true", help="increase the information verbosity")
 
 opt = parser.parse_args()
 print(opt)
@@ -41,14 +45,18 @@ print(net)
 # Test photos: Default Reside
 images = utils.load_all_image(opt.test)
 
+# Output photos
+if not os.path.exists(opt.output):
+    os.mkdir(opt.output)
+
 for im_path in tqdm(images):
     filename = im_path.split('/')[-1]
-    
-    print(filename)
     im = Image.open(im_path)
     h, w = im.size
     
-    print(h, w)
+    if verbose:
+        print("Input filename: {}".format(filename))
+        print("Image shape: {}, {}".format(h, w))
     
     im = ToTensor()(im)
     im = Variable(im).view(1, -1, w, h)
@@ -63,7 +71,4 @@ for im_path in tqdm(images):
     im = im.data[0]
     im = ToPILImage()(im)
 
-    if not os.path.exists("output/"):
-        os.mkdir("output/")
-
-    im.save('output/%s' % filename)
+    im.save(os.path.join(opt.output, filename))
