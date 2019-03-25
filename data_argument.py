@@ -1,3 +1,9 @@
+"""
+  library:
+  * PIL     pip3 install pillow
+  * scipy   pip3 install scipy
+"""
+
 import os
 import numpy as np
 from PIL import Image
@@ -6,6 +12,9 @@ from scipy.misc import imsave
 from scipy.ndimage import rotate
 from joblib import Parallel, delayed
 
+# Folder A: Hazy Image
+# Folder B: Ground Truth
+# Folder AB: Output Directory
 parser = argparse.ArgumentParser('create image pairs')
 parser.add_argument("--size", type=int, default=512, help="which size to generate")
 parser.add_argument('--fold_A', dest='fold_A', help='input directory for Haze Image', type=str,
@@ -22,6 +31,8 @@ fix_size = int(args.size)
 splits = os.listdir(args.fold_A)
 folder = args.fold_AB
 
+# Check folders here, make the directories if don't exist.
+# Please delete fold_AB first
 if not os.path.exists(folder):
     os.makedirs(folder)
     os.makedirs("%s/label" % folder)
@@ -40,6 +51,7 @@ def arguments(sp):
             im_A = np.asarray(Image.open(img_fold_A))
             im_B = np.asarray(Image.open(img_fold_B))
 
+            # Horizontal / Vertial Flip
             if flip == 1:
                 im_A = np.flip(im_A, 0)
                 im_B = np.flip(im_B, 0)
@@ -47,10 +59,12 @@ def arguments(sp):
                 im_A = np.flip(im_A, 1)
                 im_B = np.flip(im_B, 1)
 
+            # Rotation
             if degree != 0:
                 im_A = rotate(im_A, 90 * degree)
                 im_B = rotate(im_B, 90 * degree)
 
+            # Height, Width, Channel
             h, w, c = im_A.shape
 
             for x in range(0, h, fix_size // 2):
@@ -65,5 +79,5 @@ def arguments(sp):
                         count_im += 1
     print("Process %s for %d" % (sp, count_im))
 
-
+# Function parallel working...
 Parallel(-1)(delayed(arguments)(sp) for sp in splits)
