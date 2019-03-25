@@ -30,7 +30,7 @@ def is_image_file(filename):
   filename_lower = filename.lower()
   return any(filename_lower.endswith(extension) for extension in ['.png', '.jpg', '.bmp', '.mat'])
 
-
+# Read the images in 1 folder.
 def load_all_image(path):
   return [join(path, x) for x in listdir(path) if is_image_file(x)]
 
