@@ -12,6 +12,7 @@ import os
 """
   Some notes:
   1. In pyTorch-1.0.1, torch.autograd.Variable is deprecated, the function Variable(tensor) return tensors
+  2. In pyTorch-0.4.0, numpy is doesn't support problem.
 """
 
 verbose = False
@@ -23,7 +24,7 @@ parser.add_argument("--rb", type=int, default=13, help="number of residual block
 parser.add_argument("--checkpoint", type=str, default="./model/I-HAZE_O-HAZE.pth", help="path to load model checkpoint")
 parser.add_argument("--test", type=str, default="./dataset/reside/SOTS/indoor/hazy", help="path to load test images")
 parser.add_argument("--output", type=str, default="./output", help="path to save output images")
-parser.add_argument("--verbose", type=str, action="store_true", help="increase the information verbosity")
+parser.add_argument("--verbose", action="store_true", help="increase the information verbosity")
 
 opt = parser.parse_args()
 print(opt)
@@ -48,6 +49,10 @@ images = utils.load_all_image(opt.test)
 # Output photos
 if not os.path.exists(opt.output):
     os.mkdir(opt.output)
+
+# Ignore .keep for folder
+if ".keep" in images:
+    images.remove(".keep")
 
 for im_path in tqdm(images):
     filename = im_path.split('/')[-1]

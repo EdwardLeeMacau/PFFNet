@@ -3,16 +3,42 @@ import utils
 import os
 
 parser = argparse.ArgumentParser(description="Photo Combining")
-parser.add_argument("--output", type=str, default="./output", help="path to save output images")
-parser.add_argument("--gt", type=str, default="./dataset/reside/SOTS/indoor/gt", help="path of the ground truth images")
-parser.add_argument("--wait", type=bool, action="store_true", help="if wait, stop when every photo comes in")
-parser.add_argument("--verbose", type=str, action="store_true", help="increase the information verbosity")
+parser.add_argument("--dehazy", type=str, default="./output/NTIRE2018/indoor", help="path to save dehazy images")
+parser.add_argument("--gt", type=str, default="./IndoorTrainGT", help="path of the ground truth images")
+parser.add_argument("--hazy", type=str, default="./IndoorTrainHazy", help="path of the haze images")
+parser.add_argument("--merge", type=str, default="./merge", help="path to save the output images")
+parser.add_argument("--wait", action="store_true", help="if wait, stop when every photo comes in")
+parser.add_argument("--verbose", action="store_true", help="increase the information verbosity")
 
 opt = parser.parse_args()
 
 def main():
     gtImages     = os.listdir(opt.gt)
-    dehazeImages = os.listdir(opt.output)
+    hazyImages   = os.listdir(opt.hazy)
+    dehazyImages = os.listdir(opt.dehazy)
+
+    """ Multipul hazy images come from one gt image. """
+    # for gt_image in gtImages:
+    #     gt_image = gt_image[:gt_image.find(".")]
+
+    # for dehazy_image in dehazyImages:
+    #     dehazy_image = dehazy_image[:dehazy_image.find("_")]
+   
+    # for hazy_image in hazyImages:
+    #     hazy_image = hazy_image[:hazy_image.find("_")]
+
+    list.sort(gtImages)
+    list.sort(dehazyImages)
+    list.sort(hazyImages)
+
+    # print(gtImages)
+    # print(dehazyImages)
+    # print(hazyImages)
+
+    for dehazy_image in dehazyImages:
+        if dehazy_image in hazyImages:
+            utils.combine_photo([os.path.join(opt.dehazy, dehazy_image), os.path.join(opt.gt, dehazy_image)], os.path.join(opt.merge, dehazy_image))
+            print("Combined: {}".format(dehazy_image))
 
 if __name__ == "__main__":
     main()
