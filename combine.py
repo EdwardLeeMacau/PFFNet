@@ -17,27 +17,24 @@ def main():
     hazyImages   = os.listdir(opt.hazy)
     dehazyImages = os.listdir(opt.dehazy)
 
-    """ Multipul hazy images come from one gt image. """
-    # for gt_image in gtImages:
-    #     gt_image = gt_image[:gt_image.find(".")]
+    """ RESIDE: Multipul hazy images come from one gt image. """
+    """ NTIRE2018: 1 GT image to 1 hazy image to 1 dehazy image. """
+    for gt_image in gtImages:
+        gt_image = gt_image[:gt_image.find("_")]
 
-    # for dehazy_image in dehazyImages:
-    #     dehazy_image = dehazy_image[:dehazy_image.find("_")]
+    for dehazy_image in dehazyImages:
+        dehazy_image = dehazy_image[:dehazy_image.find("_")]
    
-    # for hazy_image in hazyImages:
-    #     hazy_image = hazy_image[:hazy_image.find("_")]
+    for hazy_image in hazyImages:
+        hazy_image = hazy_image[:hazy_image.find("_")]
 
     list.sort(gtImages)
     list.sort(dehazyImages)
     list.sort(hazyImages)
 
-    # print(gtImages)
-    # print(dehazyImages)
-    # print(hazyImages)
-
     for dehazy_image in dehazyImages:
         if dehazy_image in hazyImages:
-            utils.combine_photo([os.path.join(opt.dehazy, dehazy_image), os.path.join(opt.gt, dehazy_image)], os.path.join(opt.merge, dehazy_image))
+            utils.combine_photo([os.path.join(opt.dehazy, dehazy_image), os.path.join(opt.hazy, dehazy_image)], os.path.join(opt.merge, dehazy_image))
             print("Combined: {}".format(dehazy_image))
 
 if __name__ == "__main__":
