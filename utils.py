@@ -13,7 +13,7 @@ def combine_photo(arr, output, color="RGB"):
     img1 = Image.open(arr[0])
     img2 = Image.open(arr[1])
 
-    size = img1.shape
+    size = img1.size
 
     if color == "RGB":
         toImage = Image.new(color, (size[0] * 2, size[1]))
