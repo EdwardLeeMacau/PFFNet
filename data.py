@@ -1,20 +1,19 @@
-from os import listdir
-from os.path import join
+import os
 from PIL import Image
 from os.path import basename
 import torch.utils.data as data
 
 def is_image_file(filename):
-  filename_lower = filename.lower()
-  return any(filename_lower.endswith(extension) for extension in ['.png', '.jpg', '.bmp', '.mat'])
+    filename_lower = filename.lower()
+    return any(filename_lower.endswith(extension) for extension in ['.png', '.jpg', '.bmp', '.mat'])
 
 class DatasetFromFolder(data.Dataset):
     def __init__(self, image_dir, transform=None):
         super(DatasetFromFolder, self).__init__()
-        data_dir = "%s/data/" % image_dir
-        label_dir = "%s/label/" % image_dir
-        self.data_filenames = [join(data_dir, x) for x in listdir(data_dir) if is_image_file(x)]
-        self.label_filenames = [join(label_dir, x) for x in listdir(label_dir) if is_image_file(x)]
+        data_dir  = os.path.join(image_dir, "data")
+        label_dir = os.path.join(image_dir, "label")
+        self.data_filenames = [os.path.join(data_dir, x) for x in os.listdir(data_dir) if is_image_file(x)]
+        self.label_filenames = [os.path.join(label_dir, x) for x in os.listdir(label_dir) if is_image_file(x)]
 
         self.transform = transform
 
