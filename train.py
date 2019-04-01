@@ -1,5 +1,7 @@
 # coding=utf-8
 import argparse
+import logging
+import logging.config
 import os
 import urllib.request
 import numpy as np
@@ -36,6 +38,9 @@ parser.add_argument("--momentum", default=0.9, type=float, help="Momentum, Defau
 parser.add_argument("--pretrained", default="", type=str, help="path to pretrained model (default: none)")
 # parser.add_argument("--report", default=False, type=bool, help="report to wechat")
 
+# Set logger
+logging.config.fileConfig("logging.ini")
+statelogger = logging.getLogger(__name__)
 
 def main():
     global opt, name, logger, model, criterion
@@ -47,13 +52,12 @@ def main():
 
     logger = SummaryWriter("runs/" + name)
 
-    cuda = opt.cuda
-    if cuda and not torch.cuda.is_available():
+    if opt.cuda and not torch.cuda.is_available():
         raise Exception("No GPU found, please run without --cuda")
 
     seed = 1334
     torch.manual_seed(seed)
-    if cuda:
+    if opt.cuda:
         torch.cuda.manual_seed(seed)
 
     cudnn.benchmark = True
@@ -87,7 +91,8 @@ def main():
             opt.start_epoch = checkpoint["epoch"] // 2 + 1
             model.load_state_dict(checkpoint["state_dict"])
         else:
-            print("=> no checkpoint found at '{}'".format(opt.resume))
+            raise Exception("=> no checkpoint found at '{}'".format(opt.resume))
+            # print("=> no checkpoint found at '{}'".format(opt.resume))
 
     # optionally copy weights from a checkpoint
     if opt.pretrained:
@@ -96,17 +101,16 @@ def main():
             weights = torch.load(opt.pretrained)
             model.load_state_dict(weights['state_dict'].state_dict())
         else:
-            print("=> no model found at '{}'".format(opt.pretrained))
+            raise Exception("=> no pretrained model found at '{}'".format(opt.pretrained))
+            # print("=> no model found at '{}'".format(opt.pretrained))
 
     print("==========> Setting GPU")
-    if cuda:
+    if opt.cuda:
         model = nn.DataParallel(model, device_ids=[i for i in range(opt.gpus)]).cuda()
         criterion = criterion.cuda()
     else:
         model = model.cpu()
         criterion = criterion.cpu()
-
-    print(torch.cuda.memory_allocated(0))
 
     print("==========> Setting Optimizer")
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr)
@@ -119,6 +123,8 @@ def main():
 
 def train(training_data_loader, indoor_test_loader, optimizer, epoch):
     print("epoch =", epoch, "lr =", optimizer.param_groups[0]["lr"])
+    print("Memory Usage: {}".format(torch.cuda.memory_allocated(0)))
+    
     for iteration, batch in enumerate(training_data_loader, 1):
         model.train()
         model.zero_grad()
@@ -185,6 +191,7 @@ def test(test_data_loader, epoch):
         mses.append(mse.data[0])
         psnr = 10 * np.log10(1.0 / mse.data[0])
         psnrs.append(psnr)
+    
     psnr_mean = np.mean(psnrs)
     mse_mean = np.mean(mses)
 
