@@ -20,8 +20,9 @@ from utils import save_checkpoint
 parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
 parser.add_argument("--tag", type=str, help="tag for this training")
 parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
-parser.add_argument("--train", default="../datasets/IndoorTrain", type=str, help="path to load train datasets")
-parser.add_argument("--test", default="../datasets/IndoorTest", type=str, help="path to load test datasets")
+parser.add_argument("--train", default="./IndoorTrain", type=str, help="path to load train datasets")
+parser.add_argument("--test", default="./IndoorTrain", type=str, help="path to load test datasets")
+# parser.add_argument("--test", default="./dataset/IndoorTest", type=str, help="path to load test datasets")
 parser.add_argument("--batchSize", type=int, default=64, help="training batch size")
 parser.add_argument("--nEpochs", type=int, default=300, help="number of epochs to train for")
 parser.add_argument("--lr", type=float, default=0.0001, help="Learning Rate. Default=1e-4")
@@ -104,6 +105,8 @@ def main():
     else:
         model = model.cpu()
         criterion = criterion.cpu()
+
+    print(torch.cuda.memory_allocated(0))
 
     print("==========> Setting Optimizer")
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr)
