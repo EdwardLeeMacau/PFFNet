@@ -20,10 +20,8 @@ from utils import save_checkpoint
 parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
 parser.add_argument("--tag", type=str, help="tag for this training")
 parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
-parser.add_argument("--train", default="../datasets/IndoorTrain/", type=str,
-                    help="path to load train datasets(default: none)")
-parser.add_argument("--test", default="../datasets/IndoorTest/", type=str,
-                    help="path to load test datasets(default: none)")
+parser.add_argument("--train", default="../datasets/IndoorTrain/", type=str, help="path to load train datasets")
+parser.add_argument("--test", default="../datasets/IndoorTest/", type=str, help="path to load test datasets")
 parser.add_argument("--batchSize", type=int, default=64, help="training batch size")
 parser.add_argument("--nEpochs", type=int, default=300, help="number of epochs to train for")
 parser.add_argument("--lr", type=float, default=0.0001, help="Learning Rate. Default=1e-4")
@@ -35,7 +33,7 @@ parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch num
 parser.add_argument("--threads", type=int, default=8, help="Number of threads for data loader to use, Default: 1")
 parser.add_argument("--momentum", default=0.9, type=float, help="Momentum, Default: 0.9")
 parser.add_argument("--pretrained", default="", type=str, help="path to pretrained model (default: none)")
-parser.add_argument("--report", default=False, type=bool, help="report to wechat")
+# parser.add_argument("--report", default=False, type=bool, help="report to wechat")
 
 
 def main():
@@ -199,11 +197,14 @@ def test(test_data_loader, epoch):
     logger.add_image('label', label, epoch)
     logger.add_image('output', output, epoch)
 
+    """
+    # Report to wechat function
+
     if opt.report:
         urllib.request.urlopen(
             "https://sc.ftqq.com/SCU21303T3ae6f3b60b71841d0def9295e4a500905a7524916a85c.send?text=epoch_{}_loss_{}".format(
                 epoch, psnr_mean))
-
+    """
 
 if __name__ == "__main__":
     os.system('clear')

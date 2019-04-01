@@ -4,9 +4,7 @@ import utils
 from PIL import Image
 import numpy as np
 import scipy.misc
-import skimage.measure.compare_ssim as ssim
-import skimage.measure.compare_psnr as psnr
-
+import skimage
 
 parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
 parser.add_argument("--data", type=str, default="./output/NTIRE2018/indoor", help="path to load data images")
@@ -29,6 +27,7 @@ def output_psnr_mse(img_orig, img_out):
     return psnr
 
 psnrs = []
+ssims = []
 
 with open(opt.output, "w") as textfile:
     for i in range(len(datas)):
@@ -38,16 +37,17 @@ with open(opt.output, "w") as textfile:
         data = scipy.misc.fromimage(Image.open(datas[i])).astype(float)/255.0
         gt = scipy.misc.fromimage(Image.open(gts[i])).astype(float)/255.0
 
-        psnr = output_psnr_mse(data, gt)
-        psnr_2 = psnr(data, gt)
-
+        psnr = skimage.measure.compare_psnr(data, gt)
+        ssim = skimage.measure.compare_ssim(data, gt, multichannel=True)
         print("PSNR: {}".format(psnr))
-        print("PSNR2: {}".format(psnr_2))
-        textfile.write("PSNR: {}\n".format(psnr))
+        print("SSIM: {}".format(ssim))
+        
+        textfile.write("PSNR: {}\nSSIM: {}\n".format(psnr, ssim))
         psnrs.append(psnr)
+        ssims.append(ssim)
 
-    print("Average PSNR: {}".format(np.mean(psnrs)))
-    textfile.write("Average PSNR: {}\n".format(np.mean(psnrs)))
+    print("Average PSNR: {}\nAverage SSIM: {}".format(np.mean(psnrs), np.mean(ssims)))
+    textfile.write("Average PSNR: {}\nAverage SSIM: {}".format(np.mean(psnrs), np.mean(ssims)))
 
 """
 75 pth
