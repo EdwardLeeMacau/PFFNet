@@ -3,19 +3,24 @@ import argparse
 import logging
 import logging.config
 import os
-import urllib.request
+import pdb
+# import urllib.request
+
 import numpy as np
+
+# pdb.set_trace()
 import torch
 from torch import nn, optim
 from torch.backends import cudnn
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, ToTensor, Resize, Normalize, CenterCrop, RandomCrop
-from tensorboardX import SummaryWriter
+# from tensorboardX import SummaryWriter
 from torchvision.utils import make_grid
 
 from data import DatasetFromFolder
 from model.rpnet import Net
+
 from utils import save_checkpoint
 
 # Training settings
@@ -30,7 +35,7 @@ parser.add_argument("--nEpochs", type=int, default=300, help="number of epochs t
 parser.add_argument("--lr", type=float, default=0.0001, help="Learning Rate. Default=1e-4")
 parser.add_argument("--step", type=int, default=2000, help="step to test the model performance. Default=2000")
 parser.add_argument("--cuda", action="store_true", help="Use cuda?")
-parser.add_argument("--gpus", type=int, default=4, help="nums of gpu to use")
+parser.add_argument("--gpus", type=int, default=1, help="nums of gpu to use")
 parser.add_argument("--resume", default="", type=str, help="Path to checkpoint (default: none)")
 parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch number (useful on restarts)")
 parser.add_argument("--threads", type=int, default=8, help="Number of threads for data loader to use, Default: 1")
@@ -50,7 +55,7 @@ def main():
     # Tag_ResidualBlocks_BatchSize
     name = "%s_%d_%d" % (opt.tag, opt.rb, opt.batchSize)
 
-    logger = SummaryWriter("runs/" + name)
+    # logger = SummaryWriter("runs/" + name)
 
     if opt.cuda and not torch.cuda.is_available():
         raise Exception("No GPU found, please run without --cuda")
@@ -72,16 +77,14 @@ def main():
         ToTensor()
     ]))
 
-    training_data_loader = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchSize,
-                                      pin_memory=True, shuffle=True)
-    indoor_test_loader = DataLoader(dataset=indoor_test_dataset, num_workers=opt.threads, batch_size=1, pin_memory=True,
-                                    shuffle=True)
+    training_data_loader = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchSize, pin_memory=True, shuffle=True)
+    indoor_test_loader = DataLoader(dataset=indoor_test_dataset, num_workers=opt.threads, batch_size=1, pin_memory=True, shuffle=True)
 
     print("==========> Building model")
     model = Net(opt.rb)
     criterion = nn.MSELoss(size_average=True)
 
-    print(model)
+    # print(model)
 
     # optionally resume from a checkpoint
     if opt.resume:
@@ -104,11 +107,12 @@ def main():
             raise Exception("=> no pretrained model found at '{}'".format(opt.pretrained))
             # print("=> no model found at '{}'".format(opt.pretrained))
 
-    print("==========> Setting GPU")
     if opt.cuda:
+        print("==========> Setting GPU")
         model = nn.DataParallel(model, device_ids=[i for i in range(opt.gpus)]).cuda()
         criterion = criterion.cuda()
     else:
+        print("==========> Setting CPU")
         model = model.cpu()
         criterion = criterion.cpu()
 
@@ -123,7 +127,7 @@ def main():
 
 def train(training_data_loader, indoor_test_loader, optimizer, epoch):
     print("epoch =", epoch, "lr =", optimizer.param_groups[0]["lr"])
-    print("Memory Usage: {}".format(torch.cuda.memory_allocated(0)))
+    # print("Memory Usage: {}".format(torch.cuda.memory_allocated(0)))
     
     for iteration, batch in enumerate(training_data_loader, 1):
         model.train()
@@ -132,9 +136,7 @@ def train(training_data_loader, indoor_test_loader, optimizer, epoch):
 
         steps = len(training_data_loader) * (epoch-1) + iteration
 
-        data, label = \
-            Variable(batch[0]), \
-            Variable(batch[1], requires_grad=False)
+        data, label = Variable(batch[0]), Variable(batch[1], requires_grad=False)
 
         if opt.cuda:
             data = data.cuda()
@@ -163,9 +165,9 @@ def train(training_data_loader, indoor_test_loader, optimizer, epoch):
             label_temp = make_grid(label.data)
             output_temp = make_grid(output.data)
 
-            logger.add_image('data_temp', data_temp, steps)
-            logger.add_image('label_temp', label_temp, steps)
-            logger.add_image('output_temp', output_temp, steps)
+            # logger.add_image('data_temp', data_temp, steps)
+            # logger.add_image('label_temp', label_temp, steps)
+            # logger.add_image('output_temp', output_temp, steps)
 
 
 def test(test_data_loader, epoch):
@@ -173,9 +175,7 @@ def test(test_data_loader, epoch):
     mses = []
     for iteration, batch in enumerate(test_data_loader, 1):
         model.eval()
-        data, label = \
-            Variable(batch[0], volatile=True), \
-            Variable(batch[1])
+        data, label = Variable(batch[0], volatile=True), Variable(batch[1])
 
         if opt.cuda:
             data = data.cuda()
@@ -186,26 +186,29 @@ def test(test_data_loader, epoch):
 
         with torch.no_grad():
             output = model(data)
+
         output = torch.clamp(output, 0., 1.)
         mse = nn.MSELoss()(output, label)
         mses.append(mse.data[0])
         psnr = 10 * np.log10(1.0 / mse.data[0])
         psnrs.append(psnr)
+
+        # TODO: Use library of PSNR and SSNI instead.
     
     psnr_mean = np.mean(psnrs)
     mse_mean = np.mean(mses)
 
     print("Vaild  epoch %d psnr: %f" % (epoch, psnr_mean))
-    logger.add_scalar('psnr', psnr_mean, epoch)
-    logger.add_scalar('mse', mse_mean, epoch)
+    # logger.add_scalar('psnr', psnr_mean, epoch)
+    # logger.add_scalar('mse', mse_mean, epoch)
 
     data = make_grid(data.data)
     label = make_grid(label.data)
     output = make_grid(output.data)
 
-    logger.add_image('data', data, epoch)
-    logger.add_image('label', label, epoch)
-    logger.add_image('output', output, epoch)
+    # logger.add_image('data', data, epoch)
+    # logger.add_image('label', label, epoch)
+    # logger.add_image('output', output, epoch)
 
     """
     # Report to wechat function
