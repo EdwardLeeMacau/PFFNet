@@ -127,7 +127,8 @@ def main():
         # test(indoor_test_loader, epoch)
 
 def train(training_data_loader, indoor_test_loader, optimizer, epoch):
-    print("epoch =", epoch, "lr =", optimizer.param_groups[0]["lr"])
+    # print("epoch =", epoch, "lr =", optimizer.param_groups[0]["lr"])
+    statelogger.info("epoch: {}, lr: {}".format(epoch, optimizer.param_groups[0]["lr"]))
     # print("Memory Usage: {}".format(torch.cuda.memory_allocated(0)))
     
     for iteration, batch in enumerate(training_data_loader, 1):
@@ -156,9 +157,8 @@ def train(training_data_loader, indoor_test_loader, optimizer, epoch):
         optimizer.step()
 
         if iteration % 10 == 0:
-            print("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(training_data_loader),
-                                                               loss.data[0]))
-
+            #print("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(training_data_loader), loss.data[0]))
+            statelogger.info("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(training_data_loader), loss.data[0]))
             # logger.add_scalar('loss', loss.data[0], steps)
 
         if iteration % opt.step == 0:
@@ -169,7 +169,6 @@ def train(training_data_loader, indoor_test_loader, optimizer, epoch):
             # logger.add_image('data_temp', data_temp, steps)
             # logger.add_image('label_temp', label_temp, steps)
             # logger.add_image('output_temp', output_temp, steps)
-
 
 def test(test_data_loader, epoch):
     psnrs = []
@@ -199,7 +198,8 @@ def test(test_data_loader, epoch):
     psnr_mean = np.mean(psnrs)
     mse_mean  = np.mean(mses)
 
-    print("Vaild  epoch %d psnr: %f" % (epoch, psnr_mean))
+    # print("Vaild  epoch %d psnr: %f" % (epoch, psnr_mean))
+    statelogger.info("[Vaild] epoch: {}, psnr: {}".format(epoch, psnr_mean))
     # logger.add_scalar('psnr', psnr_mean, epoch)
     # logger.add_scalar('mse', mse_mean, epoch)
 
