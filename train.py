@@ -48,7 +48,8 @@ logging.config.fileConfig("logging.ini")
 statelogger = logging.getLogger(__name__)
 
 def main():
-    global opt, name, logger, model, criterion
+    global opt, name, model, criterion
+    # global opt, name, logger, model, criterion
     opt = parser.parse_args()
     print(opt)
 
@@ -158,7 +159,7 @@ def train(training_data_loader, indoor_test_loader, optimizer, epoch):
             print("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(training_data_loader),
                                                                loss.data[0]))
 
-            logger.add_scalar('loss', loss.data[0], steps)
+            # logger.add_scalar('loss', loss.data[0], steps)
 
         if iteration % opt.step == 0:
             data_temp = make_grid(data.data)
@@ -196,7 +197,7 @@ def test(test_data_loader, epoch):
         # TODO: Use library of PSNR and SSNI instead.
     
     psnr_mean = np.mean(psnrs)
-    mse_mean = np.mean(mses)
+    mse_mean  = np.mean(mses)
 
     print("Vaild  epoch %d psnr: %f" % (epoch, psnr_mean))
     # logger.add_scalar('psnr', psnr_mean, epoch)
@@ -222,3 +223,6 @@ def test(test_data_loader, epoch):
 if __name__ == "__main__":
     os.system('clear')
     main()
+    
+    with open("output.txt", "w") as file:
+        file.write("Training ENDED.")
