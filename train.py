@@ -127,16 +127,17 @@ def main():
         # test(indoor_test_loader, epoch)
 
 def train(training_data_loader, indoor_test_loader, optimizer, epoch):
-    # print("epoch =", epoch, "lr =", optimizer.param_groups[0]["lr"])
     statelogger.info("epoch: {}, lr: {}".format(epoch, optimizer.param_groups[0]["lr"]))
     # print("Memory Usage: {}".format(torch.cuda.memory_allocated(0)))
     
+    model.train()
+
     for iteration, batch in enumerate(training_data_loader, 1):
-        model.train()
+        # model.train()
         model.zero_grad()
         optimizer.zero_grad()
 
-        steps = len(training_data_loader) * (epoch-1) + iteration
+        steps = len(training_data_loader) * (epoch - 1) + iteration
 
         data, label = Variable(batch[0]), Variable(batch[1], requires_grad=False)
 
@@ -161,6 +162,7 @@ def train(training_data_loader, indoor_test_loader, optimizer, epoch):
             statelogger.info("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(training_data_loader), loss.data[0]))
             # logger.add_scalar('loss', loss.data[0], steps)
 
+        """
         if iteration % opt.step == 0:
             data_temp = make_grid(data.data)
             label_temp = make_grid(label.data)
@@ -169,12 +171,13 @@ def train(training_data_loader, indoor_test_loader, optimizer, epoch):
             # logger.add_image('data_temp', data_temp, steps)
             # logger.add_image('label_temp', label_temp, steps)
             # logger.add_image('output_temp', output_temp, steps)
+        """
 
 def test(test_data_loader, epoch):
     psnrs = []
     mses = []
+    model.eval()
     for iteration, batch in enumerate(test_data_loader, 1):
-        model.eval()
         data, label = Variable(batch[0], volatile=True), Variable(batch[1])
 
         if opt.cuda:

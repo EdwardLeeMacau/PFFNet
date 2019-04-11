@@ -21,7 +21,8 @@ parser.add_argument('--fold_A', dest='fold_A', help='input directory for Haze Im
                     default='../dataset/IndoorTrainHazy')
 parser.add_argument('--fold_B', dest='fold_B', help='input directory for Clear Image', type=str,
                     default='../dataset/IndoorTrainGT')
-parser.add_argument('--fold_AB', dest='fold_AB', help='output directory', type=str, default='../dataset/IndoorTrain')
+parser.add_argument('--fold_AB', dest='fold_AB', help='output directory', type=str, 
+                    default='../dataset/IndoorTrain')
 args = parser.parse_args()
 
 for arg in vars(args):
@@ -29,18 +30,18 @@ for arg in vars(args):
 
 fix_size = int(args.size)
 splits = os.listdir(args.fold_A)
-folder = args.fold_AB
+output_folder = args.fold_AB
 
 # Check folders here, make the directories if don't exist.
 # Please delete fold_AB first
-if not os.path.exists(folder):
-    os.makedirs(folder)
-    os.makedirs("%s/label" % folder)
-    os.makedirs("%s/data" % folder)
+if not os.path.exists(output_folder):
+    os.makedirs(output_folder)
+    os.makedirs("%s/label" % output_folder)
+    os.makedirs("%s/data" % output_folder)
 
-
-def arguments(sp):
+def augments(sp):
     print("Process %s" % sp)
+
     count_im = 0
     img_fold_A = os.path.join(args.fold_A, sp)
     img_fold_B = os.path.join(args.fold_B, '_'.join([sp.split('_')[0], sp.split('_')[1], 'GT' + '.' + sp.split('_')[-1].split('.')[-1]]))
@@ -74,10 +75,12 @@ def arguments(sp):
                         patch_A = im_A[x:x + fix_size, y:y + fix_size]
                         patch_B = im_B[x:x + fix_size, y:y + fix_size]
 
-                        imsave("%s/data/%d_%s.png" % (folder, count_im, '_'.join(sp.split('_')[:-1])), patch_A)
-                        imsave("%s/label/%d_%s.png" % (folder, count_im, '_'.join(sp.split('_')[:-1])), patch_B)
+                        imsave("%s/data/%d_%s.png" % (output_folder, str(count_im).zfill(4), '_'.join(sp.split('_')[:-1])), patch_A)
+                        imsave("%s/label/%d_%s.png" % (output_folder, str(count_im).zfill(4), '_'.join(sp.split('_')[:-1])), patch_B)
                         count_im += 1
+
     print("Process %s for %d" % (sp, count_im))
 
-# Function parallel working...
-Parallel(-1)(delayed(arguments)(sp) for sp in splits)
+if __name__ == "__main__":
+    # Function parallel working...
+    Parallel(-1)(delayed(augments)(sp) for sp in splits)
