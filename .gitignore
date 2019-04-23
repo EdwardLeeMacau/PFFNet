@@ -2,6 +2,9 @@
 *.jpg
 *.png
 
+# Text
+*.txt
+
 # Dataset
 *.zip
 

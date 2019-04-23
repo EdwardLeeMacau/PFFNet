@@ -17,6 +17,8 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, ToTensor, Resize, Normalize, CenterCrop, RandomCrop
 # from tensorboardX import SummaryWriter
 from torchvision.utils import make_grid
+from skimage.measure import compare_psnr, compare_ssim
+from matplotlib import pyplot as plt
 
 from data import DatasetFromFolder
 from model.rpnet import Net
@@ -52,6 +54,12 @@ def main():
     # global opt, name, logger, model, criterion
     opt = parser.parse_args()
     print(opt)
+
+    psnr_epochs = []
+    ssim_epochs = []
+    mse_epochs  = []
+    epochs      = []
+    train_epochs = []
 
     # Tag_ResidualBlocks_BatchSize
     name = "%s_%d_%d" % (opt.tag, opt.rb, opt.batchSize)
@@ -122,18 +130,58 @@ def main():
 
     print("==========> Training")
     for epoch in range(opt.start_epoch, opt.nEpochs + 1):
-        train(training_data_loader, indoor_test_loader, optimizer, epoch)
-        save_checkpoint(model, epoch, name)
-        # test(indoor_test_loader, epoch)
+        trainloss = train(training_data_loader, indoor_test_loader, optimizer, epoch)
+        mse, psnr, ssim = test(indoor_test_loader, epoch)
+        
+        train_epochs.append(trainloss)
+        mse_epochs.append(mse)
+        psnr_epochs.append(psnr)
+        ssim_epochs.append(ssim)
+        epochs.append(epoch)
+        
+        if psnr > max(psnr_epochs):
+            save_checkpoint(model, epoch, name)
+            # test(indoor_test_loader, epoch)
+
+        # Plot TrainLoss
+        plt.clf()
+        plt.plot(epochs, train_epochs, label="TrainLoss")
+        plt.xlabel("Epoch(s)")
+        plt.legend(loc=0)
+        plt.title("TrainLoss vs Epochs")
+        plt.savefig("TrainLoss.png")
+
+        # Plot MSE
+        plt.clf()
+        plt.plot(epochs, mse_epochs, label="MSE")
+        plt.xlabel("Epoch(s)")
+        plt.legend(loc=0)
+        plt.title("MSE vs Epochs")
+        plt.savefig("MSE.png")
+        
+        # Plot PSNR and SSIM
+        plt.clf()
+        fig, axis1 = plt.subplots()
+        axis1.set_xlabel('Epoch(s)')
+        axis1.set_ylabel('Average PSNR')
+        axis2 = axis1.twinx()
+        axis2.set_ylabel('Average SSIM')
+
+        axis1.plot(epochs, psnr_epochs, label="PSNR vs Epochs")
+        axis2.plot(epochs, ssim_epochs, label="SSIM vs Epochs")
+        plt.legend(loc=0)
+        plt.title("PSNR-SSIM vs Epochs")
+        fig.tight_layout()
+        fig.savefig("PSNR-SSIM.png")
 
 def train(training_data_loader, indoor_test_loader, optimizer, epoch):
     statelogger.info("epoch: {}, lr: {}".format(epoch, optimizer.param_groups[0]["lr"]))
     # print("Memory Usage: {}".format(torch.cuda.memory_allocated(0)))
     
-    model.train()
+    trainLoss = []
 
     for iteration, batch in enumerate(training_data_loader, 1):
-        # model.train()
+        model.train()
         model.zero_grad()
         optimizer.zero_grad()
 
@@ -154,12 +202,14 @@ def train(training_data_loader, indoor_test_loader, optimizer, epoch):
         loss = criterion(output, label)
         loss.backward()
 
+        trainLoss.append(loss.item())
+
         # torch.nn.utils.clip_grad_norm(model.parameters(), 0.1)
         optimizer.step()
 
         if iteration % 10 == 0:
             #print("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(training_data_loader), loss.data[0]))
-            statelogger.info("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(training_data_loader), loss.data[0]))
+            statelogger.info("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(training_data_loader), loss.item()))
             # logger.add_scalar('loss', loss.data[0], steps)
 
         """
@@ -173,10 +223,15 @@ def train(training_data_loader, indoor_test_loader, optimizer, epoch):
             # logger.add_image('output_temp', output_temp, steps)
         """
 
+    trainLoss = np.asarray(trainLoss)
+    return np.mean(trainLoss)
+
 def test(test_data_loader, epoch):
     psnrs = []
+    ssims = []
     mses = []
     model.eval()
+
     for iteration, batch in enumerate(test_data_loader, 1):
         data, label = Variable(batch[0], volatile=True), Variable(batch[1])
 
@@ -191,18 +246,23 @@ def test(test_data_loader, epoch):
             output = model(data)
 
         output = torch.clamp(output, 0., 1.)
+        
         mse = nn.MSELoss()(output, label)
-        mses.append(mse.data[0])
-        psnr = 10 * np.log10(1.0 / mse.data[0])
+        mses.append(mse.item())
+        psnr = 10 * np.log10(1.0 / mse.item())
         psnrs.append(psnr)
+        ssim = compare_ssim(output, label)
+        ssims.append(ssim)
 
-        # TODO: Use library of PSNR and SSNI instead.
+        # TODO: Use library of PSNR and SSIM instead.
     
     psnr_mean = np.mean(psnrs)
     mse_mean  = np.mean(mses)
+    ssim_mean = np.mean(ssims)
 
     # print("Vaild  epoch %d psnr: %f" % (epoch, psnr_mean))
     statelogger.info("[Vaild] epoch: {}, psnr: {}".format(epoch, psnr_mean))
+    statelogger.info("[Vaild] epoch: {}, psnr: {}".format(epoch, ssim_mean))
     # logger.add_scalar('psnr', psnr_mean, epoch)
     # logger.add_scalar('mse', mse_mean, epoch)
 
@@ -214,18 +274,8 @@ def test(test_data_loader, epoch):
     # logger.add_image('label', label, epoch)
     # logger.add_image('output', output, epoch)
 
-    """
-    # Report to wechat function
-
-    if opt.report:
-        urllib.request.urlopen(
-            "https://sc.ftqq.com/SCU21303T3ae6f3b60b71841d0def9295e4a500905a7524916a85c.send?text=epoch_{}_loss_{}".format(
-                epoch, psnr_mean))
-    """
+    return mse_mean, psnr_mean, ssim_mean
 
 if __name__ == "__main__":
     os.system('clear')
     main()
-    
-    with open("output.txt", "w") as file:
-        file.write("Training ENDED.")
