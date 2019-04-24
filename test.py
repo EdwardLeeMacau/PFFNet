@@ -37,7 +37,7 @@ def predict():
     verbose = False
 
     parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
-    parser.add_argument("--rb", type=int, default=13, help="number of residual blocks")
+    parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
     parser.add_argument("--checkpoint", type=str, default="./model/I-HAZE_O-HAZE.pth", help="path to load model checkpoint")
     parser.add_argument("--test", type=str, default="./dataset/reside/SOTS/indoor/hazy", help="path to load test images")
     parser.add_argument("--cuda", action="store_true", help="Use cuda?")

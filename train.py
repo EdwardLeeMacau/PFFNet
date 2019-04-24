@@ -239,51 +239,51 @@ def test(test_data_loader, epoch):
     mses = []
     model.eval()
 
-    for iteration, batch in enumerate(test_data_loader, 1):
-        data, label = Variable(batch[0], volatile=True), Variable(batch[1])
+    with torch.no_grad():
+        for iteration, batch in enumerate(test_data_loader, 1):
+            # data, label = Variable(batch[0], volatile=True), Variable(batch[1])
+            data, label = batch[0], batch[1]
 
-        if opt.cuda:
-            data = data.cuda()
-            label = label.cuda()
-        else:
-            data = data.cpu()
-            label = label.cpu()
+            if opt.cuda:
+                data = data.cuda()
+                label = label.cuda()
+            else:
+                data = data.cpu()
+                label = label.cpu()
 
-        with torch.no_grad():
-            output = model(data)
+            with torch.no_grad():
+                output = model(data)
 
-        output = torch.clamp(output, 0., 1.)
+            output = torch.clamp(output, 0., 1.)
+            
+            mse = nn.MSELoss()(output, label)
+            mses.append(mse.item())
+            psnr = 10 * np.log10(1.0 / mse.item())
+            psnrs.append(psnr)
+            # ssim = 0
+            # for i in range(output.shape[0]):
+            #     ssim += compare_ssim(output[i], label[i], multichannel=True)
+            # ssim /= output.shape[0]
+            # ssim = compare_ssim(output, label)
+            # ssims.append(ssim)
         
-        mse = nn.MSELoss()(output, label)
-        mses.append(mse.item())
-        psnr = 10 * np.log10(1.0 / mse.item())
-        psnrs.append(psnr)
-        # ssim = 0
-        # for i in range(output.shape[0]):
-        #     ssim += compare_ssim(output[i], label[i], multichannel=True)
-        # ssim /= output.shape[0]
-        # ssim = compare_ssim(output, label)
-        # ssims.append(ssim)
+        psnr_mean = np.mean(psnrs)
+        mse_mean  = np.mean(mses)
+        # ssim_mean = np.mean(ssims)
 
-        # TODO: Use library of PSNR and SSIM instead.
-    
-    psnr_mean = np.mean(psnrs)
-    mse_mean  = np.mean(mses)
-    # ssim_mean = np.mean(ssims)
+        # print("Vaild  epoch %d psnr: %f" % (epoch, psnr_mean))
+        statelogger.info("[Vaild] epoch: {}, psnr: {}".format(epoch, psnr_mean))
+        # statelogger.info("[Vaild] epoch: {}, psnr: {}".format(epoch, ssim_mean))
+        # logger.add_scalar('psnr', psnr_mean, epoch)
+        # logger.add_scalar('mse', mse_mean, epoch)
 
-    # print("Vaild  epoch %d psnr: %f" % (epoch, psnr_mean))
-    statelogger.info("[Vaild] epoch: {}, psnr: {}".format(epoch, psnr_mean))
-    # statelogger.info("[Vaild] epoch: {}, psnr: {}".format(epoch, ssim_mean))
-    # logger.add_scalar('psnr', psnr_mean, epoch)
-    # logger.add_scalar('mse', mse_mean, epoch)
+        data = make_grid(data.data)
+        label = make_grid(label.data)
+        output = make_grid(output.data)
 
-    data = make_grid(data.data)
-    label = make_grid(label.data)
-    output = make_grid(output.data)
-
-    # logger.add_image('data', data, epoch)
-    # logger.add_image('label', label, epoch)
-    # logger.add_image('output', output, epoch)
+        # logger.add_image('data', data, epoch)
+        # logger.add_image('label', label, epoch)
+        # logger.add_image('output', output, epoch)
 
     return mse_mean, psnr_mean
 
