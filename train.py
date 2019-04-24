@@ -36,11 +36,11 @@ parser.add_argument("--batchSize", type=int, default=64, help="training batch si
 parser.add_argument("--nEpochs", type=int, default=300, help="number of epochs to train for")
 parser.add_argument("--lr", type=float, default=0.0001, help="Learning Rate. Default=1e-4")
 parser.add_argument("--step", type=int, default=2000, help="step to test the model performance. Default=2000")
-parser.add_argument("--cuda", action="store_true", help="Use cuda?")
+parser.add_argument("--cuda", default=True, help="Use cuda?")
 parser.add_argument("--gpus", type=int, default=1, help="nums of gpu to use")
 parser.add_argument("--resume", default="", type=str, help="Path to checkpoint (default: none)")
 parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch number (useful on restarts)")
-parser.add_argument("--threads", type=int, default=8, help="Number of threads for data loader to use, Default: 1")
+parser.add_argument("--threads", type=int, default=0, help="Number of threads for data loader to use, Default: 1")
 parser.add_argument("--momentum", default=0.9, type=float, help="Momentum, Default: 0.9")
 parser.add_argument("--pretrained", default="", type=str, help="path to pretrained model (default: none)")
 # parser.add_argument("--report", default=False, type=bool, help="report to wechat")
@@ -131,12 +131,12 @@ def main():
     print("==========> Training")
     for epoch in range(opt.start_epoch, opt.nEpochs + 1):
         trainloss = train(training_data_loader, indoor_test_loader, optimizer, epoch)
-        mse, psnr, ssim = test(indoor_test_loader, epoch)
+        mse, psnr = test(indoor_test_loader, epoch)
         
         train_epochs.append(trainloss)
         mse_epochs.append(mse)
         psnr_epochs.append(psnr)
-        ssim_epochs.append(ssim)
+        # ssim_epochs.append(ssim)
         epochs.append(epoch)
         
         if psnr > max(psnr_epochs):
@@ -161,18 +161,24 @@ def main():
         
         # Plot PSNR and SSIM
         plt.clf()
-        fig, axis1 = plt.subplots()
-        axis1.set_xlabel('Epoch(s)')
-        axis1.set_ylabel('Average PSNR')
-        axis2 = axis1.twinx()
-        axis2.set_ylabel('Average SSIM')
+        plt.plot(epochs, psnr_epochs, label="PSNR vs Epochs")
+        plt.xlabel("Epoch(s)")
+        plt.legent(loc=0)
+        plt.title("PSNR vs Epochs")
+        plt.savefig("PSNR.png")
 
-        axis1.plot(epochs, psnr_epochs, label="PSNR vs Epochs")
-        axis2.plot(epochs, ssim_epochs, label="SSIM vs Epochs")
-        plt.legend(loc=0)
-        plt.title("PSNR-SSIM vs Epochs")
-        fig.tight_layout()
-        fig.savefig("PSNR-SSIM.png")
+        # fig, axis1 = plt.subplots()
+        # axis1.set_xlabel('Epoch(s)')
+        # axis1.set_ylabel('Average PSNR')
+        # axis2 = axis1.twinx()
+        # axis2.set_ylabel('Average SSIM')
+
+        # axis1.plot(epochs, psnr_epochs, label="PSNR vs Epochs")
+        # axis2.plot(epochs, ssim_epochs, label="SSIM vs Epochs")
+        # plt.legend(loc=0)
+        # plt.title("PSNR-SSIM vs Epochs")
+        # fig.tight_layout()
+        # fig.savefig("PSNR-SSIM.png")
 
 def train(training_data_loader, indoor_test_loader, optimizer, epoch):
     statelogger.info("epoch: {}, lr: {}".format(epoch, optimizer.param_groups[0]["lr"]))
@@ -187,14 +193,15 @@ def train(training_data_loader, indoor_test_loader, optimizer, epoch):
 
         steps = len(training_data_loader) * (epoch - 1) + iteration
 
-        data, label = Variable(batch[0]), Variable(batch[1], requires_grad=False)
+        data, label = batch[0].cuda(), batch[1].cuda()
 
-        if opt.cuda:
-            data = data.cuda()
-            label = label.cuda()
-        else:
-            data = data.cpu()
-            label = label.cpu()
+        # if opt.cuda:
+        data = data.cuda()
+        label = label.cuda()
+        
+        # else:
+        #     data = data.cpu()
+        #     label = label.cpu()
 
         output = model(data)
 
@@ -251,18 +258,22 @@ def test(test_data_loader, epoch):
         mses.append(mse.item())
         psnr = 10 * np.log10(1.0 / mse.item())
         psnrs.append(psnr)
-        ssim = compare_ssim(output, label)
-        ssims.append(ssim)
+        # ssim = 0
+        # for i in range(output.shape[0]):
+        #     ssim += compare_ssim(output[i], label[i], multichannel=True)
+        # ssim /= output.shape[0]
+        # ssim = compare_ssim(output, label)
+        # ssims.append(ssim)
 
         # TODO: Use library of PSNR and SSIM instead.
     
     psnr_mean = np.mean(psnrs)
     mse_mean  = np.mean(mses)
-    ssim_mean = np.mean(ssims)
+    # ssim_mean = np.mean(ssims)
 
     # print("Vaild  epoch %d psnr: %f" % (epoch, psnr_mean))
     statelogger.info("[Vaild] epoch: {}, psnr: {}".format(epoch, psnr_mean))
-    statelogger.info("[Vaild] epoch: {}, psnr: {}".format(epoch, ssim_mean))
+    # statelogger.info("[Vaild] epoch: {}, psnr: {}".format(epoch, ssim_mean))
     # logger.add_scalar('psnr', psnr_mean, epoch)
     # logger.add_scalar('mse', mse_mean, epoch)
 
@@ -274,7 +285,7 @@ def test(test_data_loader, epoch):
     # logger.add_image('label', label, epoch)
     # logger.add_image('output', output, epoch)
 
-    return mse_mean, psnr_mean, ssim_mean
+    return mse_mean, psnr_mean
 
 if __name__ == "__main__":
     os.system('clear')
