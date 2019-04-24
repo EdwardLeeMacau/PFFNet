@@ -62,7 +62,7 @@ def main():
     train_epochs = []
 
     # Tag_ResidualBlocks_BatchSize
-    name = "%s_%d_%d" % (opt.tag, opt.rb, opt.batchSize)
+    name = "Model_%d_%d" % (opt.rb, opt.batchSize)
 
     # logger = SummaryWriter("runs/" + name)
 
