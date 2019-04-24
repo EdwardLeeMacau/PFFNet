@@ -3,15 +3,6 @@
   FileName     [ test.py ]
   PackageName  [ PFFNet ]
   Synopsis     [ Generated the dehazed images from the PFFNet Model ]
-
-  | Argument | Usage                                                    |
-  | -------- | -------------------------------------------------------- |
-  | Debug    | Open the debug mode (usually don't generate the file)    |
-  | Verbose  | Show the process detail                                  |
-  | Process  | Start the SNMPMessage processing                         |
-  | Request  | Send the SNMPMessage to the controller                   |
-  | Update   |                                                          |
-  | Match    |                                                          |
 """
 
 import argparse

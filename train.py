@@ -1,4 +1,9 @@
-# coding=utf-8
+"""
+  FileName     [ train.py ]
+  PackageName  [ PFFNet ]
+  Synopsis     [ Train the model ]
+"""
+
 import argparse
 import logging
 import logging.config
@@ -12,11 +17,12 @@ import numpy as np
 import torch
 from torch import nn, optim
 from torch.backends import cudnn
-from torch.autograd import Variable
+# from torch.autograd import Variable
+import torchvision
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, ToTensor, Resize, Normalize, CenterCrop, RandomCrop
 # from tensorboardX import SummaryWriter
-from torchvision.utils import make_grid
+# from torchvision.utils import make_grid
 from skimage.measure import compare_psnr, compare_ssim
 from matplotlib import pyplot as plt
 
@@ -48,6 +54,16 @@ parser.add_argument("--pretrained", type=str, help="path to pretrained model (de
 # Set logger
 logging.config.fileConfig("logging.ini")
 statelogger = logging.getLogger(__name__)
+
+# Select Device
+def selectDevice():
+    use_cuda = torch.cuda.is_available()
+    device = torch.device("cuda" if use_cuda else "cpu")
+    statelogger.info("Device used: ".format(device))
+
+    return device
+
+device = selectDevice()
 
 def main():
     global opt, name, model, criterion
@@ -183,7 +199,7 @@ def main():
 def train(training_data_loader, indoor_test_loader, optimizer, epoch):
     statelogger.info("epoch: {}, lr: {}".format(epoch, optimizer.param_groups[0]["lr"]))
     # print("Memory Usage: {}".format(torch.cuda.memory_allocated(0)))
-    
+
     trainLoss = []
 
     for iteration, batch in enumerate(training_data_loader, 1):
@@ -193,42 +209,27 @@ def train(training_data_loader, indoor_test_loader, optimizer, epoch):
 
         steps = len(training_data_loader) * (epoch - 1) + iteration
 
-        data, label = batch[0].cuda(), batch[1].cuda()
-
-        # if opt.cuda:
-        data = data.cuda()
-        label = label.cuda()
-        
-        # else:
-        #     data = data.cpu()
-        #     label = label.cpu()
+        data, label = batch[0].to(device), batch[1].to(device)
 
         output = model(data)
-
-        # loss = criterion(output, label) / (data.size()[0]*2)
         loss = criterion(output, label)
         loss.backward()
 
         trainLoss.append(loss.item())
-
-        # torch.nn.utils.clip_grad_norm(model.parameters(), 0.1)
         optimizer.step()
 
         if iteration % 10 == 0:
-            #print("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(training_data_loader), loss.data[0]))
             statelogger.info("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(training_data_loader), loss.item()))
             # logger.add_scalar('loss', loss.data[0], steps)
 
-        """
         if iteration % opt.step == 0:
             data_temp = make_grid(data.data)
             label_temp = make_grid(label.data)
             output_temp = make_grid(output.data)
 
-            # logger.add_image('data_temp', data_temp, steps)
-            # logger.add_image('label_temp', label_temp, steps)
-            # logger.add_image('output_temp', output_temp, steps)
-        """
+            torchvision.utils.save_image(data_temp, "Image_{}_{}_data".format(epoch, iteration))
+            torchvision.utils.save_image(label_temp, "Image_{}_{}_label".format(epoch, iteration))
+            torchvision.utils.save_image(output_temp, "Image_{}_{}_output".format(epoch, iteration))
 
     trainLoss = np.asarray(trainLoss)
     return np.mean(trainLoss)
@@ -241,19 +242,10 @@ def test(test_data_loader, epoch):
 
     with torch.no_grad():
         for iteration, batch in enumerate(test_data_loader, 1):
-            # data, label = Variable(batch[0], volatile=True), Variable(batch[1])
-            data, label = batch[0], batch[1]
+            statelogger.info("Testing: {}".format(iteration))
+            data, label = batch[0].to(device), batch[1].to(device)
 
-            if opt.cuda:
-                data = data.cuda()
-                label = label.cuda()
-            else:
-                data = data.cpu()
-                label = label.cpu()
-
-            with torch.no_grad():
-                output = model(data)
-
+            output = model(data)
             output = torch.clamp(output, 0., 1.)
             
             mse = nn.MSELoss()(output, label)
@@ -277,9 +269,9 @@ def test(test_data_loader, epoch):
         # logger.add_scalar('psnr', psnr_mean, epoch)
         # logger.add_scalar('mse', mse_mean, epoch)
 
-        data = make_grid(data.data)
-        label = make_grid(label.data)
-        output = make_grid(output.data)
+        # data = make_grid(data.data)
+        # label = make_grid(label.data)
+        # output = make_grid(output.data)
 
         # logger.add_image('data', data, epoch)
         # logger.add_image('label', label, epoch)
