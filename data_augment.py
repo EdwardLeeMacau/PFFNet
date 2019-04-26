@@ -12,45 +12,18 @@ from scipy.misc import imsave
 from scipy.ndimage import rotate
 from joblib import Parallel, delayed
 
-# Folder A: Hazy Image
-# Folder B: Ground Truth
-# Folder AB: Output Directory
-parser = argparse.ArgumentParser('create image pairs')
-parser.add_argument("--size", type=int, default=512, help="which size to generate")
-parser.add_argument('--fold_A', dest='fold_A', help='input directory for Haze Image', type=str,
-                    default='../dataset/IndoorTrainHazy')
-parser.add_argument('--fold_B', dest='fold_B', help='input directory for Clear Image', type=str,
-                    default='../dataset/IndoorTrainGT')
-parser.add_argument('--fold_AB', dest='fold_AB', help='output directory', type=str, 
-                    default='../dataset/IndoorTrain')
-args = parser.parse_args()
-
-for arg in vars(args):
-    print('[%s] = ' % arg, getattr(args, arg))
-
-fix_size = int(args.size)
-splits = os.listdir(args.fold_A)
-output_folder = args.fold_AB
-
-# Check folders here, make the directories if don't exist.
-# Please delete fold_AB first
-if not os.path.exists(output_folder):
-    os.makedirs(output_folder)
-    os.makedirs("%s/label" % output_folder)
-    os.makedirs("%s/data" % output_folder)
-
 def augments(sp):
     print("Process %s" % sp)
 
     count_im = 0
-    img_fold_A = os.path.join(args.fold_A, sp)
-    img_fold_B = os.path.join(args.fold_B, '_'.join([sp.split('_')[0], sp.split('_')[1], 'GT' + '.' + sp.split('_')[-1].split('.')[-1]]))
+    img_hazy = os.path.join(args.hazy, sp)
+    img_gt   = os.path.join(args.gt, '_'.join([sp.split('_')[0], sp.split('_')[1], 'GT' + '.' + sp.split('_')[-1].split('.')[-1]]))
 
     for flip in [0, 1, 2]:
         for degree in [0, 1, 2, 3]:
 
-            im_A = np.asarray(Image.open(img_fold_A))
-            im_B = np.asarray(Image.open(img_fold_B))
+            im_A = np.asarray(Image.open(img_hazy))
+            im_B = np.asarray(Image.open(img_gt))
 
             # Horizontal / Vertial Flip
             if flip == 1:
@@ -68,19 +41,69 @@ def augments(sp):
             # Height, Width, Channel
             h, w, c = im_A.shape
 
-            for x in range(0, h, fix_size // 2):
-                for y in range(0, w, fix_size // 2):
+            for x in range(0, h, args.stride):
+                for y in range(0, w, args.stride):
 
-                    if x + fix_size < h and y + fix_size < w:
-                        patch_A = im_A[x:x + fix_size, y:y + fix_size]
-                        patch_B = im_B[x:x + fix_size, y:y + fix_size]
+                    if x + args.size < h and y + args.size < w:
+                        patch_A = im_A[x:x + args.size, y:y + args.size]    # Hazy images
+                        patch_B = im_B[x:x + args.size, y:y + args.size]    # Clear images
 
-                        imsave("%s/data/%d_%s.png" % (output_folder, str(count_im).zfill(4), '_'.join(sp.split('_')[:-1])), patch_A)
-                        imsave("%s/label/%d_%s.png" % (output_folder, str(count_im).zfill(4), '_'.join(sp.split('_')[:-1])), patch_B)
+                        imsave(os.path.join(args.output, "hazy", str(count_im).zfill(4) + "_" + "_".join(sp.split('_')[:-1])), patch_A)
+                        imsave(os.path.join(args.output, "gt", str(count_im).zfill(4) + "_" + "_".join(sp.split('_')[:-1])), patch_B)
+                        # imsave("%s/data/%d_%s.png" % (args.output, str(count_im).zfill(4), '_'.join(sp.split('_')[:-1])), patch_A)
+                        # imsave("%s/label/%d_%s.png" % (args.output, str(count_im).zfill(4), '_'.join(sp.split('_')[:-1])), patch_B)
+
                         count_im += 1
 
     print("Process %s for %d" % (sp, count_im))
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser('Data augmentation: Create image pairs')
+    parser.add_argument("--size", type=int, default=512, help="which size to generate")
+    parser.add_argument("--stride", type=int, default=256, help="the stride when cropping images")
+    subparser  = parser.add_subparsers(required=True, dest="command")
+
+    # I-Haze
+    ihazeparser = subparser.add_parser("I-Haze")
+    ihazeparser.add_argument('--hazy', required=True, help='Input directory for Hazy Image', type=str,
+                            default="IndoorTrainHazy")
+    ihazeparser.add_argument('--gt', required=True, help='Input directory for Clear Image', type=str,
+                            default="IntdoorTrainGT")
+    ihazeparser.add_argument('--output', required=True, help='Output directory', type=str,
+                            default="IntdoorTrain")
+
+    # O-Haze
+    ohazeparser = subparser.add_parser("O-Haze")
+    ohazeparser.add_argument('--hazy', required=True, help='Input directory for Hazy Image', type=str,
+                            default="OuttdoorTrainHazy")
+    ohazeparser.add_argument('--gt', required=True, help='Input directory for Clear Image', type=str,
+                            default="OutdoorTrainGT")
+    ohazeparser.add_argument('--output', required=True, help='Output directory', type=str,
+                            default="OutdoorTrain")
+    args = parser.parse_args()
+
+    print(args)
+
+    splits = os.listdir(args.hazy)
+
+    # Check folders here, make the directories if don't exist.
+    # 1.  Root folder
+    #     1.1 gt
+    #     2.2 hazy
+    if not os.path.exists(args.output):
+        os.makedirs(args.output)
+
+    if not os.path.exists(os.path.join(args.output, "label")):
+        os.makedirs(os.path.join(args.output, "gt"))
+
+    if not os.path.exists(os.path.join(args.output, "data")):
+        os.makedirs(os.path.join(args.output, "hazy"))
+
+    if not os.path.exists(args.hazy):
+        raise IOError("File doesn't not exist: {}".format(args.hazy))
+
+    if not os.path.exists(args.gt):
+        raise IOError("File doesn't not exist: {}".format(args.gt))
+
     # Function parallel working...
     Parallel(-1)(delayed(augments)(sp) for sp in splits)
