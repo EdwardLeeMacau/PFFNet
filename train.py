@@ -34,7 +34,7 @@ parser.add_argument("--rb", type=int, default=19, help="number of residual block
 parser.add_argument("--batchSize", type=int, default=16, help="training batch size")
 parser.add_argument("--nEpochs", type=int, default=300, help="number of epochs to train for")
 parser.add_argument("--lr", type=float, default=1e-4, help="Learning Rate. Default=1e-4")
-parser.add_argument("--step", type=int, default=2000, help="step to test the model performance. Default=2000")
+parser.add_argument("--step", type=int, default=1000, help="step to test the model performance. Default=2000")
 parser.add_argument("--cuda", default=True, help="Use cuda?")
 parser.add_argument("--gpus", type=int, default=1, help="nums of gpu to use")
 parser.add_argument("--resume", type=str, help="Path to checkpoint (default: none)")

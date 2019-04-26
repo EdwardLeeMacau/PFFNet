@@ -68,9 +68,9 @@ if __name__ == "__main__":
     ihazeparser.add_argument('--hazy', help='Input directory for Hazy Image', type=str,
                             default="IndoorTrainHazy")
     ihazeparser.add_argument('--gt', help='Input directory for Clear Image', type=str,
-                            default="IntdoorTrainGT")
+                            default="IndoorTrainGT")
     ihazeparser.add_argument('--output', help='Output directory', type=str,
-                            default="IntdoorTrain")
+                            default="IndoorTrain")
 
     # O-Haze
     ohazeparser = subparser.add_parser("O-Haze")
