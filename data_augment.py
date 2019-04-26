@@ -48,8 +48,8 @@ def augments(sp):
                         patch_A = im_A[x:x + args.size, y:y + args.size]    # Hazy images
                         patch_B = im_B[x:x + args.size, y:y + args.size]    # Clear images
 
-                        imsave(os.path.join(args.output, "hazy", str(count_im).zfill(4) + "_" + "_".join(sp.split('_')[:-1])), patch_A)
-                        imsave(os.path.join(args.output, "gt", str(count_im).zfill(4) + "_" + "_".join(sp.split('_')[:-1])), patch_B)
+                        imsave(os.path.join(args.output, "hazy", str(count_im).zfill(4) + "_" + "_".join(sp.split('_')[:-1]) + ".png"), patch_A)
+                        imsave(os.path.join(args.output, "gt", str(count_im).zfill(4) + "_" + "_".join(sp.split('_')[:-1]) + ".png"), patch_B)
                         # imsave("%s/data/%d_%s.png" % (args.output, str(count_im).zfill(4), '_'.join(sp.split('_')[:-1])), patch_A)
                         # imsave("%s/label/%d_%s.png" % (args.output, str(count_im).zfill(4), '_'.join(sp.split('_')[:-1])), patch_B)
 
@@ -75,7 +75,7 @@ if __name__ == "__main__":
     # O-Haze
     ohazeparser = subparser.add_parser("O-Haze")
     ohazeparser.add_argument('--hazy', help='Input directory for Hazy Image', type=str,
-                            default="OuttdoorTrainHazy")
+                            default="OutdoorTrainHazy")
     ohazeparser.add_argument('--gt', help='Input directory for Clear Image', type=str,
                             default="OutdoorTrainGT")
     ohazeparser.add_argument('--output', help='Output directory', type=str,
@@ -93,10 +93,10 @@ if __name__ == "__main__":
     if not os.path.exists(args.output):
         os.makedirs(args.output)
 
-    if not os.path.exists(os.path.join(args.output, "label")):
+    if not os.path.exists(os.path.join(args.output, "gt")):
         os.makedirs(os.path.join(args.output, "gt"))
 
-    if not os.path.exists(os.path.join(args.output, "data")):
+    if not os.path.exists(os.path.join(args.output, "hazy")):
         os.makedirs(os.path.join(args.output, "hazy"))
 
     if not os.path.exists(args.hazy):
