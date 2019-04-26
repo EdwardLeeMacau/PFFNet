@@ -1,12 +1,20 @@
-import torch
-import torch.nn as nn
 import math
-import numpy as np
 import os
 from os import listdir
 from os.path import join
+
+import numpy as np
+import torch
+import torch.nn as nn
 import torchvision.transforms as transforms
 from PIL import Image
+
+def selectDevice():
+    use_cuda = torch.cuda.is_available()
+    device = torch.device("cuda" if use_cuda else "cpu")
+    statelogger.info("Device used: {}".format(device))
+
+    return device
 
 def combine_photo(arr, output, color="RGB"):
     """ Accept 2 images in the array, combine them with the horizontal direction """

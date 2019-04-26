@@ -9,35 +9,28 @@ import logging
 import logging.config
 import os
 import pdb
-# import urllib.request
 
 import numpy as np
-
-# pdb.set_trace()
 import torch
+import torchvision
+from matplotlib import pyplot as plt
+from skimage.measure import compare_psnr, compare_ssim
 from torch import nn, optim
 from torch.backends import cudnn
-# from torch.autograd import Variable
-import torchvision
 from torch.utils.data import DataLoader
-from torchvision.transforms import Compose, ToTensor, Resize, Normalize, CenterCrop, RandomCrop
+from torchvision.transforms import (
+    CenterCrop, Compose, Normalize, RandomCrop, Resize, ToTensor)
 # from tensorboardX import SummaryWriter
-# from torchvision.utils import make_grid
-from skimage.measure import compare_psnr, compare_ssim
-from matplotlib import pyplot as plt
+from torchvision.utils import make_grid
 
+import utils
 from data import DatasetFromFolder
 from model.rpnet import Net
-
-from utils import save_checkpoint
 
 # Training settings
 parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
 parser.add_argument("--tag", type=str, help="tag for this training")
-parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
-parser.add_argument("--train", default="./IndoorTrain", type=str, help="path to load train datasets")
-parser.add_argument("--test", default="./IndoorTrain", type=str, help="path to load test datasets")
-# parser.add_argument("--test", default="./dataset/IndoorTest", type=str, help="path to load test datasets")
+parser.add_argument("--rb", type=int, default=19, help="number of residual blocks")
 parser.add_argument("--batchSize", type=int, default=16, help="training batch size")
 parser.add_argument("--nEpochs", type=int, default=300, help="number of epochs to train for")
 parser.add_argument("--lr", type=float, default=1e-4, help="Learning Rate. Default=1e-4")
@@ -49,36 +42,39 @@ parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch num
 parser.add_argument("--threads", type=int, default=0, help="Number of threads for data loader to use, Default: 1")
 parser.add_argument("--momentum", default=0.9, type=float, help="Momentum, Default: 0.9")
 parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
-# parser.add_argument("--report", default=False, type=bool, help="report to wechat")
+
+subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze / Both")
+
+ihazeparser = subparser.add_parser("I-Haze")
+ihazeparser.add_argument("--train", default="./IndoorTrain", type=str, help="path to load train datasets")
+ihazeparser.add_argument("--test", default="./IndoorTest", type=str, help="path to load test datasets")
+
+ohazeparser = subparser.add_parser("O-Haze")
+ohazeparser.add_argument("--train", default="./OutdoorTrain", type=str, help="path to load train datasets")
+ohazeparser.add_argument("--test", default="./OutdoorTest", type=str, help="path to load test datasets")
 
 # Set logger
 logging.config.fileConfig("logging.ini")
 statelogger = logging.getLogger(__name__)
 
 # Select Device
-def selectDevice():
-    use_cuda = torch.cuda.is_available()
-    device = torch.device("cuda" if use_cuda else "cpu")
-    statelogger.info("Device used: ".format(device))
-
-    return device
-
-device = selectDevice()
+device = utils.selectDevice()
 
 def main():
     global opt, name, model, criterion
-    # global opt, name, logger, model, criterion
     opt = parser.parse_args()
     print(opt)
 
-    psnr_epochs = []
-    ssim_epochs = []
-    mse_epochs  = []
-    epochs      = []
-    train_epochs = []
+    train_loss  = np.empty(0, dtype=float)
+    psnr_epochs = np.empty((0, 5), dtype=float)
+    ssim_epochs = np.empty((0, 5), dtype=float)
+    mse_epochs  = np.empty((0, 5), dtype=float)
+    epochs = np.empty(0, dtype=np.int64)
 
+    psnr_epochs.append()
+    
     # Tag_ResidualBlocks_BatchSize
-    name = "Model_%d_%d" % (opt.rb, opt.batchSize)
+    name = "{}_{}_{}".format(opt.command, opt.rb, opt.batchSize)
 
     # logger = SummaryWriter("runs/" + name)
 
@@ -98,18 +94,16 @@ def main():
         ToTensor()
     ]))
 
-    indoor_test_dataset = DatasetFromFolder(opt.test, transform=Compose([
+    test_dataset = DatasetFromFolder(opt.test, transform=Compose([
         ToTensor()
     ]))
 
-    training_data_loader = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchSize, pin_memory=True, shuffle=True)
-    indoor_test_loader = DataLoader(dataset=indoor_test_dataset, num_workers=opt.threads, batch_size=1, pin_memory=True, shuffle=True)
+    train_loader = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchSize, pin_memory=True, shuffle=True)
+    test_loader = DataLoader(dataset=test_dataset, num_workers=opt.threads, batch_size=1, pin_memory=True, shuffle=True)
 
     print("==========> Building model")
     model = Net(opt.rb)
     criterion = nn.MSELoss(size_average=True)
-
-    # print(model)
 
     # optionally resume from a checkpoint
     if opt.resume:
@@ -144,36 +138,41 @@ def main():
     print("==========> Setting Optimizer")
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr)
 
+    print("==========> Pre-Testing")
+    mses, psnrs, ssims = test(test_loader, 0)
+    mse_epochs  = np.append(mse_epochs, mses, axis=0)
+    psnr_epochs = np.append(psnr_epochs, psnrs, axis=0)
+    ssim_epochs = np.append(ssim_epochs, ssims, axis=0)
+    epochs = np.append(epochs, 0, axis=0)
+
     print("==========> Training")
     for epoch in range(opt.start_epoch, opt.nEpochs + 1):
-        trainloss = train(training_data_loader, indoor_test_loader, optimizer, epoch)
-        mse, psnr = test(indoor_test_loader, epoch)
+        loss = train(train_loader, test_loader, optimizer, epoch)
+        mses, psnrs, ssims = test(test_loader, epoch)
+
+        train_loss  = np.append(train_loss, loss, axis=0)
+        mse_epochs  = np.append(mse_epochs, mses, axis=0)
+        psnr_epochs = np.append(psnr_epochs, psnrs, axis=0)
+        ssim_epochs = np.append(ssim_epochs, ssims, axis=0)
+        epochs = np.append(epochs, epoch, axis=0)
         
-        train_epochs.append(trainloss)
-        mse_epochs.append(mse)
-        psnr_epochs.append(psnr)
-        # ssim_epochs.append(ssim)
-        epochs.append(epoch)
-        
-        if psnr > max(psnr_epochs):
-            save_checkpoint(model, epoch, name)
-            # test(indoor_test_loader, epoch)
+        utils.save_checkpoint(model, epoch, name)
 
         # Plot TrainLoss
         plt.clf()
-        plt.plot(epochs, train_epochs, label="TrainLoss")
+        plt.plot(epochs, train_loss, label="TrainLoss")
         plt.xlabel("Epoch(s)")
         plt.legend(loc=0)
         plt.title("TrainLoss vs Epochs")
         plt.savefig("TrainLoss.png")
 
-        # Plot MSE
+        # Plot MSE (TestLoss)
         plt.clf()
         plt.plot(epochs, mse_epochs, label="MSE")
         plt.xlabel("Epoch(s)")
         plt.legend(loc=0)
         plt.title("MSE vs Epochs")
-        plt.savefig("MSE.png")
+        plt.savefig("Test_MSE.png")
         
         # Plot PSNR and SSIM
         plt.clf()
@@ -181,7 +180,7 @@ def main():
         plt.xlabel("Epoch(s)")
         plt.legend(loc=0)
         plt.title("PSNR vs Epochs")
-        plt.savefig("PSNR.png")
+        plt.savefig("Test_PSNR.png")
 
         # fig, axis1 = plt.subplots()
         # axis1.set_xlabel('Epoch(s)')
@@ -196,18 +195,17 @@ def main():
         # fig.tight_layout()
         # fig.savefig("PSNR-SSIM.png")
 
-def train(training_data_loader, indoor_test_loader, optimizer, epoch):
+def train(train_loader, test_loader, optimizer, epoch):
     statelogger.info("epoch: {}, lr: {}".format(epoch, optimizer.param_groups[0]["lr"]))
-    # print("Memory Usage: {}".format(torch.cuda.memory_allocated(0)))
 
     trainLoss = []
 
-    for iteration, batch in enumerate(training_data_loader, 1):
+    for iteration, batch in enumerate(train_loader, 1):
         model.train()
         model.zero_grad()
         optimizer.zero_grad()
 
-        steps = len(training_data_loader) * (epoch - 1) + iteration
+        steps = len(train_loader) * (epoch - 1) + iteration
 
         data, label = batch[0].to(device), batch[1].to(device)
 
@@ -219,7 +217,7 @@ def train(training_data_loader, indoor_test_loader, optimizer, epoch):
         optimizer.step()
 
         if iteration % 10 == 0:
-            statelogger.info("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(training_data_loader), loss.item()))
+            statelogger.info("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(train_loader), loss.item()))
             # logger.add_scalar('loss', loss.data[0], steps)
 
         if iteration % opt.step == 0:
@@ -250,34 +248,25 @@ def test(test_data_loader, epoch):
             
             mse = nn.MSELoss()(output, label)
             mses.append(mse.item())
+            
             psnr = 10 * np.log10(1.0 / mse.item())
             psnrs.append(psnr)
-            # ssim = 0
-            # for i in range(output.shape[0]):
-            #     ssim += compare_ssim(output[i], label[i], multichannel=True)
-            # ssim /= output.shape[0]
-            # ssim = compare_ssim(output, label)
-            # ssims.append(ssim)
+
+            # Newly Added.
+            psnr = compare_psnr(label, output)
+            ssim = compare_ssim(label, output, multichannel=True)
+            ssims.append(ssim)
         
         psnr_mean = np.mean(psnrs)
         mse_mean  = np.mean(mses)
-        # ssim_mean = np.mean(ssims)
+        ssim_mean = np.mean(ssims)
 
-        # print("Vaild  epoch %d psnr: %f" % (epoch, psnr_mean))
+        statelogger.info("[Vaild] epoch: {}, mse: {}".format(epoch, mse_mean))
         statelogger.info("[Vaild] epoch: {}, psnr: {}".format(epoch, psnr_mean))
-        # statelogger.info("[Vaild] epoch: {}, psnr: {}".format(epoch, ssim_mean))
-        # logger.add_scalar('psnr', psnr_mean, epoch)
-        # logger.add_scalar('mse', mse_mean, epoch)
+        statelogger.info("[Vaild] epoch: {}, ssim: {}".format(epoch, ssim_mean))
 
-        # data = make_grid(data.data)
-        # label = make_grid(label.data)
-        # output = make_grid(output.data)
-
-        # logger.add_image('data', data, epoch)
-        # logger.add_image('label', label, epoch)
-        # logger.add_image('output', output, epoch)
-
-    return mse_mean, psnr_mean
+    return mses, psnrs, ssims
+    # return mse_mean, psnr_mean, ssim_mean
 
 if __name__ == "__main__":
     os.system('clear')

@@ -95,9 +95,13 @@ if __name__ == "__main__":
 
     if not os.path.exists(os.path.join(args.output, "gt")):
         os.makedirs(os.path.join(args.output, "gt"))
+    else:
+        os.system("rm " + os.path.join(args.output, "gt", "*"))
 
     if not os.path.exists(os.path.join(args.output, "hazy")):
         os.makedirs(os.path.join(args.output, "hazy"))
+    else:
+        os.system("rm " + os.path.join(args.output, "hazy", "*"))
 
     if not os.path.exists(args.hazy):
         raise IOError("File doesn't not exist: {}".format(args.hazy))

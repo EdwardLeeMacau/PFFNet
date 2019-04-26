@@ -1,17 +1,18 @@
-import os
 import argparse
+import os
 import time
-from PIL import Image
 from os.path import basename
+
 import torch.utils.data as data
 import torchvision.transforms
+from PIL import Image
 from torch.utils.data import DataLoader
 
 # Training settings
 parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
 parser.add_argument("--train", default="./IndoorTrain", type=str, help="path to load train datasets")
-parser.add_argument("--test", default="./IndoorTrain ", type=str, help="path to load test datasets")
-parser.add_argument("--batchSize", type=int, default=64, help="training batch size")
+parser.add_argument("--test", default="./IndoorTest", type=str, help="path to load test datasets")
+parser.add_argument("--batchSize", type=int, default=16, help="training batch size")
 parser.add_argument("--threads", default=4, help="Number of threads for data loader to use")
 args = parser.parse_args()
 
@@ -22,8 +23,8 @@ def is_image_file(filename):
 class DatasetFromFolder(data.Dataset):
     def __init__(self, image_dir, transform=None):
         super(DatasetFromFolder, self).__init__()
-        data_dir  = os.path.join(image_dir, "data")
-        label_dir = os.path.join(image_dir, "label")
+        data_dir  = os.path.join(image_dir, "hazy")
+        label_dir = os.path.join(image_dir, "gt")
         self.data_filenames = [os.path.join(data_dir, x) for x in os.listdir(data_dir) if is_image_file(x)]
         self.label_filenames = [os.path.join(label_dir, x) for x in os.listdir(label_dir) if is_image_file(x)]
 
@@ -42,7 +43,7 @@ class DatasetFromFolder(data.Dataset):
     def __len__(self):
         return len(self.data_filenames)
 
-def unittest():
+def dataloader_unittest():
     training_dataset = DatasetFromFolder(args.train, transform=torchvision.transforms.ToTensor())
     testing_dataset  = DatasetFromFolder(args.test, transform=torchvision.transforms.ToTensor())
 
@@ -58,4 +59,5 @@ def unittest():
     print("Using time: {}".format(time.time() - start))
 
 if __name__ == "__main__":
-    unittest()
+    dataloader_unittest()
+    
