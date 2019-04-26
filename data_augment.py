@@ -65,20 +65,20 @@ if __name__ == "__main__":
 
     # I-Haze
     ihazeparser = subparser.add_parser("I-Haze")
-    ihazeparser.add_argument('--hazy', required=True, help='Input directory for Hazy Image', type=str,
+    ihazeparser.add_argument('--hazy', help='Input directory for Hazy Image', type=str,
                             default="IndoorTrainHazy")
-    ihazeparser.add_argument('--gt', required=True, help='Input directory for Clear Image', type=str,
+    ihazeparser.add_argument('--gt', help='Input directory for Clear Image', type=str,
                             default="IntdoorTrainGT")
-    ihazeparser.add_argument('--output', required=True, help='Output directory', type=str,
+    ihazeparser.add_argument('--output', help='Output directory', type=str,
                             default="IntdoorTrain")
 
     # O-Haze
     ohazeparser = subparser.add_parser("O-Haze")
-    ohazeparser.add_argument('--hazy', required=True, help='Input directory for Hazy Image', type=str,
+    ohazeparser.add_argument('--hazy', help='Input directory for Hazy Image', type=str,
                             default="OuttdoorTrainHazy")
-    ohazeparser.add_argument('--gt', required=True, help='Input directory for Clear Image', type=str,
+    ohazeparser.add_argument('--gt', help='Input directory for Clear Image', type=str,
                             default="OutdoorTrainGT")
-    ohazeparser.add_argument('--output', required=True, help='Output directory', type=str,
+    ohazeparser.add_argument('--output', help='Output directory', type=str,
                             default="OutdoorTrain")
     args = parser.parse_args()
 
