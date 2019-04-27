@@ -143,18 +143,18 @@ def main():
     mse_epochs  = np.append(mse_epochs, np.expand_dims(mses, axis=0), axis=0)
     psnr_epochs = np.append(psnr_epochs, np.expand_dims(psnrs, axis=0), axis=0)
     ssim_epochs = np.append(ssim_epochs, np.expand_dims(ssims, axis=0), axis=0)
-    epochs = np.append(epochs, 0, axis=0)
+    epochs = np.append(epochs, np.array([0]), axis=0)
 
     print("==========> Training")
     for epoch in range(opt.start_epoch, opt.nEpochs + 1):
         loss = train(train_loader, test_loader, optimizer, epoch)
         mses, psnrs, ssims = test(test_loader, epoch)
 
-        train_loss  = np.append(train_loss, loss, axis=0)
+        train_loss  = np.append(train_loss, np.array([loss]), axis=0)
         mse_epochs  = np.append(mse_epochs, np.expand_dims(mses, axis=0), axis=0)
         psnr_epochs = np.append(psnr_epochs, np.expand_dims(psnrs, axis=0), axis=0)
         ssim_epochs = np.append(ssim_epochs, np.expand_dims(ssims, axis=0), axis=0)
-        epochs = np.append(epochs, epoch, axis=0)
+        epochs = np.append(epochs, np.array([epoch]), axis=0)
         
         utils.save_checkpoint(model, epoch, name)
 
@@ -242,7 +242,7 @@ def test(test_loader, epoch):
         for iteration, batch in enumerate(test_loader, 1):
             statelogger.info("Testing: {}".format(iteration))
             data   = batch[0].to(device)
-            label  = batch[1]
+            label  = batch[1].to(device)
 
             output = model(data)
             output = torch.clamp(output, 0., 1.)
