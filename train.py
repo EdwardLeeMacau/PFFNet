@@ -30,7 +30,7 @@ from model.rpnet import Net
 # Training settings
 parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
 parser.add_argument("--tag", type=str, help="tag for this training")
-parser.add_argument("--rb", type=int, default=19, help="number of residual blocks")
+parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
 parser.add_argument("--batchSize", type=int, default=16, help="training batch size")
 parser.add_argument("--nEpochs", type=int, default=300, help="number of epochs to train for")
 parser.add_argument("--lr", type=float, default=1e-4, help="Learning Rate. Default=1e-4")
@@ -42,16 +42,17 @@ parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch num
 parser.add_argument("--threads", type=int, default=0, help="Number of threads for data loader to use, Default: 1")
 parser.add_argument("--momentum", default=0.9, type=float, help="Momentum, Default: 0.9")
 parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
+parser.add_argument("--train", default="./IndoorTrain", type=str, help="path to load train datasets")
+parser.add_argument("--test", default="./IndoorTest", type=str, help="path to load test datasets")
+# subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze / Both")
 
-subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze / Both")
+# ihazeparser = subparser.add_parser("I-Haze")
+# ihazeparser.add_argument("--train", default="./IndoorTrain", type=str, help="path to load train datasets")
+# ihazeparser.add_argument("--test", default="./IndoorTest", type=str, help="path to load test datasets")
 
-ihazeparser = subparser.add_parser("I-Haze")
-ihazeparser.add_argument("--train", default="./IndoorTrain", type=str, help="path to load train datasets")
-ihazeparser.add_argument("--test", default="./IndoorTest", type=str, help="path to load test datasets")
-
-ohazeparser = subparser.add_parser("O-Haze")
-ohazeparser.add_argument("--train", default="./OutdoorTrain", type=str, help="path to load train datasets")
-ohazeparser.add_argument("--test", default="./OutdoorTest", type=str, help="path to load test datasets")
+# ohazeparser = subparser.add_parser("O-Haze")
+# ohazeparser.add_argument("--train", default="./OutdoorTrain", type=str, help="path to load train datasets")
+# ohazeparser.add_argument("--test", default="./OutdoorTest", type=str, help="path to load test datasets")
 
 # Set logger
 logging.config.fileConfig("logging.ini")
@@ -70,11 +71,10 @@ def main():
     ssim_epochs = np.empty((0, 5), dtype=float)
     mse_epochs  = np.empty((0, 5), dtype=float)
     epochs = np.empty(0, dtype=np.int64)
-
-    psnr_epochs.append()
     
     # Tag_ResidualBlocks_BatchSize
-    name = "{}_{}_{}".format(opt.command, opt.rb, opt.batchSize)
+    # name = "{}_{}_{}".format(opt.command, opt.rb, opt.batchSize)
+    name = "{}_{}_{}".format("Indoor", opt.rb, opt.batchSize)
 
     # logger = SummaryWriter("runs/" + name)
 
@@ -232,14 +232,14 @@ def train(train_loader, test_loader, optimizer, epoch):
     trainLoss = np.asarray(trainLoss)
     return np.mean(trainLoss)
 
-def test(test_data_loader, epoch):
+def test(test_loader, epoch):
     psnrs = []
     ssims = []
     mses = []
     model.eval()
 
     with torch.no_grad():
-        for iteration, batch in enumerate(test_data_loader, 1):
+        for iteration, batch in enumerate(test_loader, 1):
             statelogger.info("Testing: {}".format(iteration))
             data, label = batch[0].to(device), batch[1].to(device)
 

@@ -12,7 +12,6 @@ from PIL import Image
 def selectDevice():
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
-    statelogger.info("Device used: {}".format(device))
 
     return device
 

@@ -25,8 +25,8 @@ class DatasetFromFolder(data.Dataset):
         super(DatasetFromFolder, self).__init__()
         data_dir  = os.path.join(image_dir, "hazy")
         label_dir = os.path.join(image_dir, "gt")
-        self.data_filenames = [os.path.join(data_dir, x) for x in os.listdir(data_dir) if is_image_file(x)]
-        self.label_filenames = [os.path.join(label_dir, x) for x in os.listdir(label_dir) if is_image_file(x)]
+        self.data_filenames  = sorted([os.path.join(data_dir, x) for x in os.listdir(data_dir) if is_image_file(x)])
+        self.label_filenames = sorted([os.path.join(label_dir, x) for x in os.listdir(label_dir) if is_image_file(x)])
 
         self.transform = transform
 
