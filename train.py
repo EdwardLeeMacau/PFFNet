@@ -140,9 +140,9 @@ def main():
 
     print("==========> Pre-Testing")
     mses, psnrs, ssims = test(test_loader, 0)
-    mse_epochs  = np.append(mse_epochs, mses, axis=0)
-    psnr_epochs = np.append(psnr_epochs, psnrs, axis=0)
-    ssim_epochs = np.append(ssim_epochs, ssims, axis=0)
+    mse_epochs  = np.append(mse_epochs, np.expand_dims(mses, axis=0), axis=0)
+    psnr_epochs = np.append(psnr_epochs, np.expand_dims(psnrs, axis=0), axis=0)
+    ssim_epochs = np.append(ssim_epochs, np.expand_dims(ssims, axis=0), axis=0)
     epochs = np.append(epochs, 0, axis=0)
 
     print("==========> Training")
@@ -151,16 +151,16 @@ def main():
         mses, psnrs, ssims = test(test_loader, epoch)
 
         train_loss  = np.append(train_loss, loss, axis=0)
-        mse_epochs  = np.append(mse_epochs, mses, axis=0)
-        psnr_epochs = np.append(psnr_epochs, psnrs, axis=0)
-        ssim_epochs = np.append(ssim_epochs, ssims, axis=0)
+        mse_epochs  = np.append(mse_epochs, np.expand_dims(mses, axis=0), axis=0)
+        psnr_epochs = np.append(psnr_epochs, np.expand_dims(psnrs, axis=0), axis=0)
+        ssim_epochs = np.append(ssim_epochs, np.expand_dims(ssims, axis=0), axis=0)
         epochs = np.append(epochs, epoch, axis=0)
         
         utils.save_checkpoint(model, epoch, name)
 
         # Plot TrainLoss
         plt.clf()
-        plt.plot(epochs, train_loss, label="TrainLoss")
+        plt.plot(epochs[1:], train_loss, label="TrainLoss")
         plt.xlabel("Epoch(s)")
         plt.legend(loc=0)
         plt.title("TrainLoss vs Epochs")
@@ -176,24 +176,24 @@ def main():
         
         # Plot PSNR and SSIM
         plt.clf()
-        plt.plot(epochs, psnr_epochs, label="PSNR vs Epochs")
-        plt.xlabel("Epoch(s)")
-        plt.legend(loc=0)
-        plt.title("PSNR vs Epochs")
-        plt.savefig("Test_PSNR.png")
-
-        # fig, axis1 = plt.subplots()
-        # axis1.set_xlabel('Epoch(s)')
-        # axis1.set_ylabel('Average PSNR')
-        # axis2 = axis1.twinx()
-        # axis2.set_ylabel('Average SSIM')
-
-        # axis1.plot(epochs, psnr_epochs, label="PSNR vs Epochs")
-        # axis2.plot(epochs, ssim_epochs, label="SSIM vs Epochs")
+        # plt.plot(epochs, psnr_epochs, label="PSNR vs Epochs")
+        # plt.xlabel("Epoch(s)")
         # plt.legend(loc=0)
-        # plt.title("PSNR-SSIM vs Epochs")
-        # fig.tight_layout()
-        # fig.savefig("PSNR-SSIM.png")
+        # plt.title("PSNR vs Epochs")
+        # plt.savefig("Test_PSNR.png")
+
+        fig, axis1 = plt.subplots()
+        axis1.set_xlabel('Epoch(s)')
+        axis1.set_ylabel('Average PSNR')
+        axis2 = axis1.twinx()
+        axis2.set_ylabel('Average SSIM')
+
+        axis1.plot(epochs, psnr_epochs, label="PSNR vs Epochs")
+        axis2.plot(epochs, ssim_epochs, label="SSIM vs Epochs")
+        plt.legend(loc=0)
+        plt.title("PSNR-SSIM vs Epochs")
+        fig.tight_layout()
+        fig.savefig("Test_PSNR-SSIM.png")
 
 def train(train_loader, test_loader, optimizer, epoch):
     statelogger.info("epoch: {}, lr: {}".format(epoch, optimizer.param_groups[0]["lr"]))
@@ -241,7 +241,8 @@ def test(test_loader, epoch):
     with torch.no_grad():
         for iteration, batch in enumerate(test_loader, 1):
             statelogger.info("Testing: {}".format(iteration))
-            data, label = batch[0].to(device), batch[1].to(device)
+            data   = batch[0].to(device)
+            label  = batch[1]
 
             output = model(data)
             output = torch.clamp(output, 0., 1.)
@@ -249,12 +250,16 @@ def test(test_loader, epoch):
             mse = nn.MSELoss()(output, label)
             mses.append(mse.item())
             
-            psnr = 10 * np.log10(1.0 / mse.item())
-            psnrs.append(psnr)
+            output = output.squeeze(0).permute(1, 2, 0).cpu().numpy()
+            label  = label.squeeze(0).permute(1, 2, 0).cpu().numpy()
+
+            # psnr = 10 * np.log10(1.0 / mse.item())
+            # psnrs.append(psnr)
 
             # Newly Added.
             psnr = compare_psnr(label, output)
             ssim = compare_ssim(label, output, multichannel=True)
+            psnrs.append(psnr)
             ssims.append(ssim)
         
         psnr_mean = np.mean(psnrs)
@@ -265,7 +270,7 @@ def test(test_loader, epoch):
         statelogger.info("[Vaild] epoch: {}, psnr: {}".format(epoch, psnr_mean))
         statelogger.info("[Vaild] epoch: {}, ssim: {}".format(epoch, ssim_mean))
 
-    return mses, psnrs, ssims
+    return np.array(mses), np.array(psnrs), np.array(ssims)
     # return mse_mean, psnr_mean, ssim_mean
 
 if __name__ == "__main__":
