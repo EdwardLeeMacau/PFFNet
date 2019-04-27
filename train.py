@@ -158,7 +158,7 @@ def main():
         
         utils.save_checkpoint(model, epoch, name)
 
-        with open("statistics.txt", "r") as textfile:
+        with open("statistics.txt", "w") as textfile:
             textfile.write("Train Loss")
             textfile.write(str(train_loss.tolist()))
 
@@ -246,9 +246,9 @@ def train(train_loader, test_loader, optimizer, epoch):
             label_temp = make_grid(label.data)
             output_temp = make_grid(output.data)
 
-            torchvision.utils.save_image(data_temp, "Image_{}_{}_data.png".format(epoch, iteration))
-            torchvision.utils.save_image(label_temp, "Image_{}_{}_label.png".format(epoch, iteration))
-            torchvision.utils.save_image(output_temp, "Image_{}_{}_output.png".format(epoch, iteration))
+            torchvision.utils.save_image(data_temp, "./images/Image_{}_{}_data.png".format(epoch, iteration))
+            torchvision.utils.save_image(label_temp, "./images/Image_{}_{}_label.png".format(epoch, iteration))
+            torchvision.utils.save_image(output_temp, "./images/Image_{}_{}_output.png".format(epoch, iteration))
 
     trainLoss = np.asarray(trainLoss)
     return np.mean(trainLoss)
