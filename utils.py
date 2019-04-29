@@ -60,7 +60,7 @@ def load_all_image(path):
 
 def save_checkpoint(model, root, epoch, model_folder):
     """ Only save the model and the epoch, but not the optimizer. """
-    model_out_path = os.path.join(root, model_folder, epoch+".pth")
+    model_out_path = os.path.join(root, model_folder, str(epoch)+".pth")
 
     state_dict = model.module.state_dict()
     for key in state_dict.keys():

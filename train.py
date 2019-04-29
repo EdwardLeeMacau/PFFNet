@@ -42,8 +42,8 @@ parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch num
 parser.add_argument("--threads", type=int, default=0, help="Number of threads for data loader to use, Default: 1")
 parser.add_argument("--momentum", default=0.9, type=float, help="Momentum, Default: 0.9")
 parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
-parser.add_argument("--train", default="/media/disk1/IndoorTrain", type=str, help="path to load train datasets")
-parser.add_argument("--test", default="/media/disk1/IndoorTest", type=str, help="path to load test datasets")
+parser.add_argument("--train", default="/media/disk1/EdwardLee/IndoorTrain", type=str, help="path to load train datasets")
+parser.add_argument("--test", default="/media/disk1/EdwardLee/IndoorTest", type=str, help="path to load test datasets")
 # subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze / Both")
 
 # ihazeparser = subparser.add_parser("I-Haze")
@@ -161,7 +161,7 @@ def main():
         ssim_epochs = np.append(ssim_epochs, np.expand_dims(ssims, axis=0), axis=0)
         epochs = np.append(epochs, np.array([epoch]), axis=0)
         
-        utils.save_checkpoint(model, "/media/disk1/checkpoints", epoch, name)
+        utils.save_checkpoint(model, "/media/disk1/EdwardLee/checkpoints", epoch, name)
 
         with open("statistics.txt", "w") as textfile:
             textfile.write("Train Loss")
