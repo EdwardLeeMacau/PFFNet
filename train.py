@@ -32,7 +32,7 @@ parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
 parser.add_argument("--tag", type=str, help="tag for this training")
 parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
 parser.add_argument("--batchSize", type=int, default=16, help="training batch size")
-parser.add_argument("--nEpochs", type=int, default=300, help="number of epochs to train for")
+parser.add_argument("--nEpochs", type=int, default=30, help="number of epochs to train for")
 parser.add_argument("--lr", type=float, default=1e-4, help="Learning Rate. Default=1e-4")
 parser.add_argument("--step", type=int, default=1000, help="step to test the model performance. Default=2000")
 parser.add_argument("--cuda", default=True, help="Use cuda?")
@@ -137,6 +137,7 @@ def main():
 
     print("==========> Setting Optimizer")
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10], gamma=0.1)
 
     print("==========> Pre-Testing")
     mses, psnrs, ssims = test(test_loader, 0)
@@ -147,6 +148,10 @@ def main():
 
     print("==========> Training")
     for epoch in range(opt.start_epoch, opt.nEpochs + 1):
+        # Adjust the learning
+        scheduler.step()
+
+        # Train, val
         loss = train(train_loader, test_loader, optimizer, epoch)
         mses, psnrs, ssims = test(test_loader, epoch)
 
