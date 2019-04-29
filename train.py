@@ -42,8 +42,8 @@ parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch num
 parser.add_argument("--threads", type=int, default=0, help="Number of threads for data loader to use, Default: 1")
 parser.add_argument("--momentum", default=0.9, type=float, help="Momentum, Default: 0.9")
 parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
-parser.add_argument("--train", default="./IndoorTrain", type=str, help="path to load train datasets")
-parser.add_argument("--test", default="./IndoorTest", type=str, help="path to load test datasets")
+parser.add_argument("--train", default="/media/disk1/IndoorTrain", type=str, help="path to load train datasets")
+parser.add_argument("--test", default="/media/disk1/IndoorTest", type=str, help="path to load test datasets")
 # subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze / Both")
 
 # ihazeparser = subparser.add_parser("I-Haze")
@@ -99,7 +99,7 @@ def main():
     ]))
 
     train_loader = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchSize, pin_memory=True, shuffle=True)
-    test_loader = DataLoader(dataset=test_dataset, num_workers=opt.threads, batch_size=1, pin_memory=True, shuffle=True)
+    test_loader = DataLoader(dataset=test_dataset, num_workers=opt.threads, batch_size=1, pin_memory=True, shuffle=False)
 
     print("==========> Building model")
     model = Net(opt.rb)
@@ -156,7 +156,7 @@ def main():
         ssim_epochs = np.append(ssim_epochs, np.expand_dims(ssims, axis=0), axis=0)
         epochs = np.append(epochs, np.array([epoch]), axis=0)
         
-        utils.save_checkpoint(model, epoch, name)
+        utils.save_checkpoint(model, "/media/disk1/checkpoints", epoch, name)
 
         with open("statistics.txt", "w") as textfile:
             textfile.write("Train Loss")
@@ -178,43 +178,32 @@ def main():
             textfile.write("Epochs")
             textfile.write(str(epochs.tolist()))
 
-
-        # Plot TrainLoss
+        # Plot TrainLoss and TestLoss
         plt.clf()
-        plt.plot(epochs[1:], train_loss, label="TrainLoss")
-        plt.xlabel("Epoch(s)")
+        plt.plot(epochs[1:], train_loss, label="TrainLoss vs Epochs", color='b')
+        plt.plot(epochs, mse_epochs, label="TestLoss vs Epochs", color='r')
+            
         plt.legend(loc=0)
-        plt.title("TrainLoss vs Epochs")
-        plt.savefig("TrainLoss.png")
+        plt.title("Loss vs Epochs")
+        plt.savefig("loss.png")
 
-        # Plot MSE (TestLoss)
-        plt.clf()
-        plt.plot(epochs, mse_epochs, label="MSE")
-        plt.xlabel("Epoch(s)")
-        plt.legend(loc=0)
-        plt.title("MSE vs Epochs")
-        plt.savefig("Test_MSE.png")
-        
         # Plot PSNR and SSIM
         plt.clf()
-        # plt.plot(epochs, psnr_epochs, label="PSNR vs Epochs")
-        # plt.xlabel("Epoch(s)")
-        # plt.legend(loc=0)
-        # plt.title("PSNR vs Epochs")
-        # plt.savefig("Test_PSNR.png")
-
-        fig, axis1 = plt.subplots()
+        fig, axis1 = plt.subplots(sharex=True)
         axis1.set_xlabel('Epoch(s)')
         axis1.set_ylabel('Average PSNR')
+        axis1.plot(epochs, psnr_epochs, label="PSNR vs Epochs", color='b')
+        axis1.plot(epochs, np.repeat(np.amax(psnr_epochs), len(epochs)), ':')
+        axis1.tick_params()
+        
         axis2 = axis1.twinx()
+        axis2.plot(epochs, ssim_epochs, label="SSIM vs Epochs", color='r')
         axis2.set_ylabel('Average SSIM')
-
-        axis1.plot(epochs, psnr_epochs, label="PSNR vs Epochs")
-        axis2.plot(epochs, ssim_epochs, label="SSIM vs Epochs")
+        axis2.tick_params()
+            
         plt.legend(loc=0)
         plt.title("PSNR-SSIM vs Epochs")
-        fig.tight_layout()
-        fig.savefig("Test_PSNR-SSIM.png")
+        plt.savefig("psnr_ssim.png")
 
 def train(train_loader, test_loader, optimizer, epoch):
     statelogger.info("epoch: {}, lr: {}".format(epoch, optimizer.param_groups[0]["lr"]))
@@ -246,9 +235,9 @@ def train(train_loader, test_loader, optimizer, epoch):
             label_temp = make_grid(label.data)
             output_temp = make_grid(output.data)
 
-            torchvision.utils.save_image(data_temp, "./images/Image_{}_{}_data.png".format(epoch, iteration))
-            torchvision.utils.save_image(label_temp, "./images/Image_{}_{}_label.png".format(epoch, iteration))
-            torchvision.utils.save_image(output_temp, "./images/Image_{}_{}_output.png".format(epoch, iteration))
+            torchvision.utils.save_image(data_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_data.png".format(epoch, iteration))
+            torchvision.utils.save_image(label_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_label.png".format(epoch, iteration))
+            torchvision.utils.save_image(output_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_output.png".format(epoch, iteration))
 
     trainLoss = np.asarray(trainLoss)
     return np.mean(trainLoss)
@@ -292,7 +281,6 @@ def test(test_loader, epoch):
         statelogger.info("[Vaild] epoch: {}, ssim: {}".format(epoch, ssim_mean))
 
     return np.array(mses), np.array(psnrs), np.array(ssims)
-    # return mse_mean, psnr_mean, ssim_mean
 
 if __name__ == "__main__":
     os.system('clear')

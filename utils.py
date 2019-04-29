@@ -30,6 +30,7 @@ def combine_photo(arr, output, color="RGB"):
     toImage.save(output)
 
 def weights_init_kaiming(m):
+    """ Weights initial methods """
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
         nn.init.kaiming_normal(m.weight.data, a=0, mode='fan_in')
@@ -57,8 +58,9 @@ def load_all_image(path):
     return [join(path, x) for x in listdir(path) if is_image_file(x)]
 
 
-def save_checkpoint(model, epoch, model_folder):
-    model_out_path = "checkpoints/%s/%d.pth" % (model_folder, epoch)
+def save_checkpoint(model, root, epoch, model_folder):
+    """ Only save the model and the epoch, but not the optimizer. """
+    model_out_path = os.path.join(root, model_folder, epoch+".pth")
 
     state_dict = model.module.state_dict()
     for key in state_dict.keys():
@@ -67,8 +69,8 @@ def save_checkpoint(model, epoch, model_folder):
     if not os.path.exists("checkpoints"):
         os.makedirs("checkpoints")
 
-    if not os.path.exists("checkpoints/" + model_folder):
-        os.makedirs("checkpoints/" + model_folder)
+    if not os.path.exists(os.path.join(root, model_folder)):
+        os.makedirs(os.path.join(root, model_folder))
 
     torch.save({
         'epoch': epoch,
