@@ -190,6 +190,7 @@ def main():
         plt.clf()
         plt.plot(epochs[1:], train_loss, label="TrainLoss vs Epochs", color='b')
         plt.plot(epochs, mse_means, label="TestLoss vs Epochs", color='r')
+        plt.plot(epochs, np.repeat(np.amin(mse_means), len(epochs)), ':')
         # plt.plot(epochs, mse_epochs, label="TestLoss vs Epochs", color='r')
             
         plt.legend(loc=0)
