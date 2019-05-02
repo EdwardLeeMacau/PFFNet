@@ -25,8 +25,33 @@ from model.rpnet import Net
 """
 
 def predict():
-    verbose = opt.verbose
+    parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
+    parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
+    parser.add_argument("--checkpoint", type=str, default="/media/disk1/EdwardLee/checkpoints/Indoor_18_16", help="root of model checkpoint")
+    parser.add_argument("--pth", type=str, help="choose the checkpoint")
+    parser.add_argument("--test", type=str, default="/media/disk1/EdwardLee/IndoorTest", help="path to load test images")
+    parser.add_argument("--cuda", default=True, help="Use cuda?")
+    parser.add_argument("--gpus", type=int, default=4, help="nums of gpu to use")
+    parser.add_argument("--output", type=str, default="/media/disk1/EdwardLee/Output", help="path to save output images")
+    parser.add_argument("--verbose", default=True, help="increase the information verbosity")
 
+    # subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze / SOTS")
+
+    # ihazeparser = subparser.add_parser("I-Haze")
+    # ihazeparser.add_argument("--checkpoint", default="/media/disk1/EdwardLee/checkpoints/Indoor_18_16", type=str, help="path to load train datasets")
+    # ihazeparser.add_argument("--test", default="/media/disk1/EdwardLee/IndoorTest", type=str, help="path to load test datasets")
+
+    # ohazeparser = subparser.add_parser("O-Haze")
+    # ohazeparser.add_argument("--checkpoint", default="/media/disk1/EdwardLee/checkpoints/Outdoor_18_16", type=str, help="path to load train datasets")
+    # ohazeparser.add_argument("--test", default="/media/disk1/EdwardLee/OutdoorTest", type=str, help="path to load test datasets")
+
+    # sotsparser = subparser.add_parser("SOTS")
+    # sotsparser.add_argument("--checkpoint", default="/media/disk1/EdwardLee/checkpoints/Indoor_18_16", type=str, help="path to load train datasets")
+    # sotsparser.add_argument("--test", default="/media/disk1/EdwardLee/dataset/reside/SOTS/indoor", type=str, help="path to load test datasets")
+
+    opt = parser.parse_args()
+    print(opt)
+    
     """
     Setting: 
     1. Read I-HAZE_O-HAZE as model.
@@ -68,7 +93,7 @@ def predict():
         im = Image.open(im_path)
         h, w = im.size
         
-        if verbose:
+        if opt.verbose:
             print("==========> Input filename: {}".format(filename))
             print("==========> Image shape: {}, {}".format(h, w))
         
@@ -87,33 +112,6 @@ def predict():
         print("==========> File saved: {}".format(os.path.join(opt.output, filename)))
 
 def main():
-    parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
-    parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
-    parser.add_argument("--checkpoint", type=str, default="/media/disk1/EdwardLee/checkpoints/Indoor_18_16", help="root of model checkpoint")
-    parser.add_argument("--pth", type=str, help="choose the checkpoint")
-    parser.add_argument("--test", type=str, default="/media/disk1/EdwardLee/IndoorTest", help="path to load test images")
-    parser.add_argument("--cuda", default=True, help="Use cuda?")
-    parser.add_argument("--gpus", type=int, default=4, help="nums of gpu to use")
-    parser.add_argument("--output", type=str, default="/media/disk1/EdwardLee/Output", help="path to save output images")
-    parser.add_argument("--verbose", default=True, help="increase the information verbosity")
-
-    # subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze / SOTS")
-
-    # ihazeparser = subparser.add_parser("I-Haze")
-    # ihazeparser.add_argument("--checkpoint", default="/media/disk1/EdwardLee/checkpoints/Indoor_18_16", type=str, help="path to load train datasets")
-    # ihazeparser.add_argument("--test", default="/media/disk1/EdwardLee/IndoorTest", type=str, help="path to load test datasets")
-
-    # ohazeparser = subparser.add_parser("O-Haze")
-    # ohazeparser.add_argument("--checkpoint", default="/media/disk1/EdwardLee/checkpoints/Outdoor_18_16", type=str, help="path to load train datasets")
-    # ohazeparser.add_argument("--test", default="/media/disk1/EdwardLee/OutdoorTest", type=str, help="path to load test datasets")
-
-    # sotsparser = subparser.add_parser("SOTS")
-    # sotsparser.add_argument("--checkpoint", default="/media/disk1/EdwardLee/checkpoints/Indoor_18_16", type=str, help="path to load train datasets")
-    # sotsparser.add_argument("--test", default="/media/disk1/EdwardLee/dataset/reside/SOTS/indoor", type=str, help="path to load test datasets")
-
-    opt = parser.parse_args()
-    print(opt)
-    
     predict()
 
 if __name__ == "__main__":
