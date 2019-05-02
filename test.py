@@ -29,7 +29,7 @@ def predict():
     parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
     parser.add_argument("--checkpoint", type=str, default="/media/disk1/EdwardLee/checkpoints/Indoor_18_16", help="root of model checkpoint")
     parser.add_argument("--pth", type=str, help="choose the checkpoint")
-    parser.add_argument("--test", type=str, default="/media/disk1/EdwardLee/IndoorTest", help="path to load test images")
+    parser.add_argument("--test", type=str, default="/media/disk1/EdwardLee/IndoorTest/hazy", help="path to load test images")
     parser.add_argument("--cuda", default=True, help="Use cuda?")
     parser.add_argument("--gpus", type=int, default=4, help="nums of gpu to use")
     parser.add_argument("--output", type=str, default="/media/disk1/EdwardLee/Output", help="path to save output images")
@@ -60,7 +60,7 @@ def predict():
 
     device = utils.selectDevice()
 
-    checkpoint = os.path.join(opt.checkpoint, opt.pth)
+    checkpoint = os.path.join(opt.checkpoint, opt.pth + ".pth")
     if not os.path.exists(checkpoint):
         raise FileNotFoundError("File doesn't exists: {}".format(checkpoint))
 

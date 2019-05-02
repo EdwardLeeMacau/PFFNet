@@ -66,20 +66,20 @@ if __name__ == "__main__":
     # I-Haze
     ihazeparser = subparser.add_parser("I-Haze")
     ihazeparser.add_argument('--hazy', help='Input directory for Hazy Image', type=str,
-                            default="IndoorTrainHazy")
+                            default="/media/disk1/EdwardLee/dataset/IndoorTrainHazy")
     ihazeparser.add_argument('--gt', help='Input directory for Clear Image', type=str,
-                            default="IndoorTrainGT")
+                            default="/media/disk1/EdwardLee/dataset/IndoorTrainGT")
     ihazeparser.add_argument('--output', help='Output directory', type=str,
-                            default="IndoorTrain")
+                            default="/media/disk1/EdwardLee/IndoorTrain")
 
     # O-Haze
     ohazeparser = subparser.add_parser("O-Haze")
     ohazeparser.add_argument('--hazy', help='Input directory for Hazy Image', type=str,
-                            default="OutdoorTrainHazy")
+                            default="/media/disk1/EdwardLee/dataset/OutdoorTrainHazy")
     ohazeparser.add_argument('--gt', help='Input directory for Clear Image', type=str,
-                            default="OutdoorTrainGT")
+                            default="/media/disk1/EdwardLee/dataset/OutdoorTrainGT")
     ohazeparser.add_argument('--output', help='Output directory', type=str,
-                            default="OutdoorTrain")
+                            default="/media/disk1/EdwardLee/OutdoorTrain")
     args = parser.parse_args()
 
     print(args)

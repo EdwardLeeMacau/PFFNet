@@ -42,17 +42,17 @@ parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch num
 parser.add_argument("--threads", type=int, default=8, help="Number of threads for data loader to use, Default: 1")
 parser.add_argument("--momentum", default=0.9, type=float, help="Momentum, Default: 0.9")
 parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
-parser.add_argument("--train", default="/media/disk1/EdwardLee/IndoorTrain", type=str, help="path to load train datasets")
-parser.add_argument("--test", default="/media/disk1/EdwardLee/IndoorTest", type=str, help="path to load test datasets")
-# subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze / Both")
+parser.add_argument("--train", default="/media/disk1/EdwardLee/OutdoorTrain", type=str, help="path to load train datasets")
+parser.add_argument("--test", default="/media/disk1/EdwardLee/OutdoorTest", type=str, help="path to load test datasets")
+# subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze")
 
 # ihazeparser = subparser.add_parser("I-Haze")
-# ihazeparser.add_argument("--train", default="./IndoorTrain", type=str, help="path to load train datasets")
-# ihazeparser.add_argument("--test", default="./IndoorTest", type=str, help="path to load test datasets")
+# ihazeparser.add_argument("--train", default="/media/disk1/EdwardLee/IndoorTrain", type=str, help="path to load train datasets")
+# ihazeparser.add_argument("--test", default="/media/disk1/EdwardLee/IndoorTest", type=str, help="path to load test datasets")
 
 # ohazeparser = subparser.add_parser("O-Haze")
-# ohazeparser.add_argument("--train", default="./OutdoorTrain", type=str, help="path to load train datasets")
-# ohazeparser.add_argument("--test", default="./OutdoorTest", type=str, help="path to load test datasets")
+# ohazeparser.add_argument("--train", default="/media/disk1/EdwardLee/OutdoorTrain", type=str, help="path to load train datasets")
+# ohazeparser.add_argument("--test", default="/media/disk1/EdwardLee/OutdoorTest", type=str, help="path to load test datasets")
 
 # Set logger
 logging.config.fileConfig("logging.ini")
@@ -74,7 +74,7 @@ def main():
     
     # Tag_ResidualBlocks_BatchSize
     # name = "{}_{}_{}".format(opt.command, opt.rb, opt.batchSize)
-    name = "{}_{}_{}".format("Indoor", opt.rb, opt.batchSize)
+    name = "{}_{}_{}".format("Outdoor", opt.rb, opt.batchSize)
 
     # logger = SummaryWriter("runs/" + name)
 
