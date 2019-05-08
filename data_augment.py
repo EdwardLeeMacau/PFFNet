@@ -25,7 +25,7 @@ def random_augments(sp):
 
     raw_im_A, raw_im_B = Image.open(img_hazy), Image.open(img_gt)
 
-    h, w, _ = raw_im_A.shape
+    w, h = raw_im_A.size
     l = min(h, w)
 
     # -----------------------------
@@ -35,8 +35,14 @@ def random_augments(sp):
     #   Y: Uniform Choose
     #   Flip and 
     # -----------------------------
+
     for _ in range(args.location):
+        # --------------------------------------------------------------------
         # Random choose size
+        #   if image size is smaller than 1024, only 512 is cropped.
+        #   if image_size is smaller than 1536, randomly choose 512 or 1024 as size
+        #   if image_size is larger than 1536, randomly choose 512, 1024 or 1536
+        # ----------------------------------------------------------------------
         if l < 1024:   
             size = 512
         elif l < 1536:      
@@ -73,8 +79,8 @@ def random_augments(sp):
             im_A = im_A.transpose(Image.ROTATE_270)
             im_B = im_B.transpose(Image.ROTATE_270)
 
-        imsave(os.path.join(args.output, "hazy", str(count_im).zfill(4) + "_" + "_".join(sp.split('_')[:-1]) + ".png"), im_A)
-        imsave(os.path.join(args.output, "gt", str(count_im).zfill(4) + "_" + "_".join(sp.split('_')[:-1]) + ".png"), im_B)
+        im_A.save(os.path.join(args.output, "hazy", str(count_im).zfill(4) + "_" + "_".join(sp.split('_')[:-1]) + ".png"))
+        im_B.save(os.path.join(args.output, "gt", str(count_im).zfill(4) + "_" + "_".join(sp.split('_')[:-1]) + ".png"))
                 
         count_im += 1
     
@@ -183,7 +189,8 @@ if __name__ == "__main__":
         
         if command == 'Y':
             print("Clean {}.".format(os.path.join(args.output, "gt")))
-            os.system("rm " + os.path.join(args.output, "gt", "*"))
+            os.system("rm -r" + os.path.join(args.output, "gt"))
+            os.makedirs(os.path.join(args.output, "gt"))
         
     # 1.2 Hazy Images
     if not os.path.exists(os.path.join(args.output, "hazy")):
@@ -194,7 +201,8 @@ if __name__ == "__main__":
         
         if command == 'Y':
             print("Clean {}".format(os.path.join(args.output, "hazy")))
-            os.system("rm " + os.path.join(args.output, "hazy", "*"))
+            os.system("rm -r" + os.path.join(args.output, "hazy"))
+            os.makedirs(os.path.join(args.output, "hazy"))
         
     # Function parallel working...
     splits = os.listdir(args.hazy)
