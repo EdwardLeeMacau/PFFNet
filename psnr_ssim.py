@@ -24,6 +24,9 @@ def psnr_ssim(img_dehaze: Image, img_gt):
     dehaze = scipy.misc.fromimage(img_dehaze).astype(float) / 255.0
     gt     = scipy.misc.fromimage(img_gt).astype(float) / 255.0
 
+    print(dehaze.shape)
+    print(gt.shape)
+
     psnr = skimage.measure.compare_psnr(dehaze, gt)
     ssim = skimage.measure.compare_ssim(dehaze, gt, multichannel=True)
     
@@ -45,8 +48,8 @@ def val(dehazes, gts, outputpath):
             print("SSIM: {}".format(ssim))
             
             textfile.write("PSNR: {:.4f}, SSIM: {:.4f}\n".format(psnr, ssim))
-            psnrs.append(psnr)
-            ssims.append(ssim)
+            # psnrs.append(psnr)
+            # ssims.append(ssim)
 
         print("Average PSNR: {:.4f}, Average SSIM: {:.4f}".format(np.mean(psnrs), np.mean(ssims)))
         textfile.write("Average PSNR: {:.4f}, Average SSIM: {:.4f}\n".format(np.mean(psnrs), np.mean(ssims)))
@@ -56,7 +59,7 @@ def val(dehazes, gts, outputpath):
 def main():
     parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
     parser.add_argument("--dehaze", type=str, default="/media/disk1/EdwardLee/Output/", help="path to load dehaze images")
-    parser.add_argument("--gt", type=str, default="/media/disk1/EdwardLee/IndoorTest", help="path to load gt images")
+    parser.add_argument("--gt", type=str, default="/media/disk1/EdwardLee/IndoorTest/gt", help="path to load gt images")
     parser.add_argument("--output", type=str, default="./psnr_ssim.txt")
 
     opt = parser.parse_args()

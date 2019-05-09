@@ -251,9 +251,9 @@ def train(train_loader, optimizer, epoch):
             # logger.add_scalar('loss', loss.data[0], steps)
 
         if iteration % opt.step == 0:
-            data_temp   = make_grid(data.data, nrow=4)
-            label_temp  = make_grid(label.data, nrow=4)
-            output_temp = make_grid(output.data, nrow=4)
+            data_temp   = make_grid(data.data, nrow=8)
+            label_temp  = make_grid(label.data, nrow=8)
+            output_temp = make_grid(output.data, nrow=8)
 
             torchvision.utils.save_image(data_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_data.png".format(epoch, iteration))
             torchvision.utils.save_image(label_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_label.png".format(epoch, iteration))

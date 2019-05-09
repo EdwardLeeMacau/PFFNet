@@ -36,15 +36,14 @@ with open("statistics.txt", "r") as textfile:
         
     
     # Plot the graphs, global setting
-    plt.figure(figsize=(12.8, 7.2))
     train_val_loss = "train_val_loss.png"
     avg_psnr_ssim  = "avg_psnr_ssim.png"
     detail_psnr    = "detail_PSNR.png"
     detail_ssim    = "detail_SSIM.png"
 
     # Plot train_loss and test_mse
-    """
     plt.clf()
+    plt.figure(figsize=(12.8, 7.2))
     plt.plot(epochs[1:], trainloss, label="TrainLoss", color='b')
     plt.plot(epochs, avg_mse, label="ValLoss", color='r')
     plt.plot(epochs, np.repeat(np.amin(avg_mse), len(epochs)), ':')
@@ -53,12 +52,10 @@ with open("statistics.txt", "r") as textfile:
     plt.xlabel("Epoch(s)")
     plt.title("Loss vs Epochs")
     plt.savefig(train_val_loss)
-    """
 
     # Plot PSNR and SSIM
-    """
     plt.clf()
-    fig, axis1 = plt.subplots(sharex=True)
+    fig, axis1 = plt.subplots(sharex=True, figsize=(12.8, 7.2))
     axis1.set_xlabel('Epoch(s)')
     axis1.set_ylabel('Average PSNR')
     axis1.plot(epochs, avg_psnr, label="PSNR vs Epochs", color='b')
@@ -72,8 +69,7 @@ with open("statistics.txt", "r") as textfile:
         
     plt.legend(loc=0)
     plt.title("PSNR-SSIM vs Epochs")
-    plt.savefig(average_psnr_ssim)
-    """    
+    plt.savefig(avg_psnr_ssim)
 
     # Plot Mean and Std of the PSNR / SSIM
     """
