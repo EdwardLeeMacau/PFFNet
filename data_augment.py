@@ -50,12 +50,15 @@ def random_augments(sp):
         else:           
             size = np.random.choice([512, 1024, 1536], size=None, replace=False, p=[0.6, 0.3, 0.1]) 
 
-        x = random.randint(0, h - size)
-        y = random.randint(0, w - size)
+        x = random.randint(0, w - size)
+        y = random.randint(0, h - size)
         
-        im_A = raw_im_A.crop((x, y, x+size, y+size)).resize((512, 512), Image.BILINEAR) # Hazy images
-        im_B = raw_im_B.crop((x, y, x+size, y+size)).resize((512, 512), Image.BILINEAR) # Clear images
-        
+        im_A, im_B = raw_im_A.copy(), raw_im_B.copy()
+        im_A = im_A.crop((x, y, x+size, y+size)).resize((512, 512), Image.BILINEAR) # Hazy images
+        im_B = im_B.crop((x, y, x+size, y+size)).resize((512, 512), Image.BILINEAR) # Clear images
+        # print(0, 0, w, h)
+        # print(x, y, x+size, y+size)
+
         flip = random.choice([0, 1, 2])
         degree = random.choice([0, 1, 2, 3])
 
@@ -212,4 +215,6 @@ if __name__ == "__main__":
         Parallel(-1)(delayed(augments)(sp) for sp in splits)
     elif args.random:
         print("Executing: random_augments")
-        Parallel(-1)(delayed(random_augments)(sp) for sp in splits)
+        # Parallel(-1)(delayed(random_augments)(sp) for sp in splits)
+        for sp in splits:
+            random_augments(sp)

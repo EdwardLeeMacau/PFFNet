@@ -29,10 +29,10 @@ from model.rpnet import Net
 
 # Training settings
 parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
-parser.add_argument("--tag", type=str, help="tag for this training")
+parser.add_argument("--tag", type=str, default="Indoor", help="tag for this training")
 parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
 parser.add_argument("--batchSize", type=int, default=16, help="training batch size")
-parser.add_argument("--nEpochs", type=int, default=30, help="number of epochs to train for")
+parser.add_argument("--nEpochs", type=int, default=100, help="number of epochs to train for")
 parser.add_argument("--lr", type=float, default=1e-4, help="Learning Rate. Default=1e-4")
 parser.add_argument("--step", type=int, default=1000, help="step to test the model performance. Default=2000")
 parser.add_argument("--cuda", default=True, help="Use cuda?")
@@ -42,8 +42,9 @@ parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch num
 parser.add_argument("--threads", type=int, default=8, help="Number of threads for data loader to use, Default: 1")
 parser.add_argument("--momentum", default=0.9, type=float, help="Momentum, Default: 0.9")
 parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
-parser.add_argument("--train", default="/media/disk1/EdwardLee/OutdoorTrain", type=str, help="path to load train datasets")
-parser.add_argument("--test", default="/media/disk1/EdwardLee/OutdoorTest", type=str, help="path to load test datasets")
+parser.add_argument("--train", default="/media/disk1/EdwardLee/IndoorTrain", type=str, help="path to load train datasets")
+parser.add_argument("--val", default="/media/disk1/EdwardLee/IndoorVal", type=str, help="path to load val datasets")
+parser.add_argument("--test", default="/media/disk1/EdwardLee/IndoorTest", type=str, help="path to load test datasets")
 # subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze")
 
 # ihazeparser = subparser.add_parser("I-Haze")
@@ -60,6 +61,7 @@ statelogger = logging.getLogger(__name__)
 
 # Select Device
 device = utils.selectDevice()
+cudnn.benchmark = True
 
 def main():
     global opt, name, model, criterion
@@ -94,12 +96,17 @@ def main():
         ToTensor()
     ]))
 
+    val_dataset = DatasetFromFolder(opt.val, transform=Compose([
+        ToTensor()
+    ]))
+
     test_dataset = DatasetFromFolder(opt.test, transform=Compose([
         ToTensor()
     ]))
 
     train_loader = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchSize, pin_memory=True, shuffle=True)
-    test_loader = DataLoader(dataset=test_dataset, num_workers=opt.threads, batch_size=1, pin_memory=True, shuffle=False)
+    val_loader   = DataLoader(dataset=val_dataset, num_workers=opt.threads, batch_size=1, pin_memory=True, shuffle=False)
+    test_loader  = DataLoader(dataset=test_dataset, num_workers=opt.threads, batch_size=1, pin_memory=True, shuffle=False)
 
     print("==========> Building model")
     model = Net(opt.rb)
@@ -110,7 +117,7 @@ def main():
         if os.path.isfile(opt.resume):
             print("=> loading checkpoint '{}'".format(opt.resume))
             checkpoint = torch.load(opt.resume)
-            opt.start_epoch = checkpoint["epoch"] // 2 + 1
+            opt.start_epoch = checkpoint["epoch"] + 1
             model.load_state_dict(checkpoint["state_dict"])
         else:
             raise Exception("=> no checkpoint found at '{}'".format(opt.resume))
@@ -140,7 +147,7 @@ def main():
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10], gamma=0.1)
 
     print("==========> Pre-Testing")
-    mses, psnrs, ssims = test(test_loader, 0)
+    mses, psnrs, ssims = test(test_loader, 0, criterion)
     mse_epochs  = np.append(mse_epochs, np.expand_dims(mses, axis=0), axis=0)
     psnr_epochs = np.append(psnr_epochs, np.expand_dims(psnrs, axis=0), axis=0)
     ssim_epochs = np.append(ssim_epochs, np.expand_dims(ssims, axis=0), axis=0)
@@ -151,9 +158,10 @@ def main():
         # Adjust the learning
         scheduler.step()
 
-        # Train, val
-        loss = train(train_loader, test_loader, optimizer, epoch)
-        mses, psnrs, ssims = test(test_loader, epoch)
+        # Train, save, val
+        loss = train(train_loader, optimizer, epoch)
+        utils.save_checkpoint(model, "./media/disk1/EdwardLee/checkpoints", epoch, name)
+        mses, psnrs, ssims = test(val_loader, epoch, criterion)
 
         train_loss  = np.append(train_loss, np.array([loss]), axis=0)
         mse_epochs  = np.append(mse_epochs, np.expand_dims(mses, axis=0), axis=0)
@@ -163,8 +171,6 @@ def main():
         psnr_means  = np.average(psnr_epochs, axis=1)
         ssim_means  = np.average(ssim_epochs, axis=1)
         epochs = np.append(epochs, np.array([epoch]), axis=0)
-        
-        utils.save_checkpoint(model, "/media/disk1/EdwardLee/checkpoints", epoch, name)
 
         with open("statistics.txt", "w") as textfile:
             textfile.write("Train Loss")
@@ -188,28 +194,27 @@ def main():
 
         # Plot TrainLoss and TestLoss
         plt.clf()
-        plt.plot(epochs[1:], train_loss, label="TrainLoss vs Epochs", color='b')
-        plt.plot(epochs, mse_means, label="TestLoss vs Epochs", color='r')
+        plt.figure(figsize=(12.8, 7.2))
+        plt.plot(epochs[1:], train_loss, label="TrainLoss", color='b')
+        plt.plot(epochs, mse_means, label="ValLoss", color='r')
         plt.plot(epochs, np.repeat(np.amin(mse_means), len(epochs)), ':')
-        # plt.plot(epochs, mse_epochs, label="TestLoss vs Epochs", color='r')
-            
         plt.legend(loc=0)
+        plt.xlabel("Epoch(s)")
         plt.title("Loss vs Epochs")
         plt.savefig("loss.png")
 
         # Plot PSNR and SSIM
         plt.clf()
+        plt.figure(figsize=(12.8, 7.2))
         fig, axis1 = plt.subplots(sharex=True)
         axis1.set_xlabel('Epoch(s)')
         axis1.set_ylabel('Average PSNR')
-        axis1.plot(epochs, psnr_means, label="PSNR vs Epochs", color='b')
+        axis1.plot(epochs, psnr_means, label="PSNR", color='b')
         axis1.plot(epochs, np.repeat(np.amax(psnr_means), len(epochs)), ':')
-        # axis1.plot(epochs, psnr_epochs, label="PSNR vs Epochs", color='b')
-        # axis1.plot(epochs, np.repeat(np.amax(psnr_epochs), len(epochs)), ':')
         axis1.tick_params()
         
         axis2 = axis1.twinx()
-        axis2.plot(epochs, ssim_means, label="SSIM vs Epochs", color='r')
+        axis2.plot(epochs, ssim_means, label="SSIM", color='r')
         # axis2.plot(epochs, ssim_epochs, label="SSIM vs Epochs", color='r')
         axis2.set_ylabel('Average SSIM')
         axis2.tick_params()
@@ -218,7 +223,9 @@ def main():
         plt.title("PSNR-SSIM vs Epochs")
         plt.savefig("psnr_ssim.png")
 
-def train(train_loader, test_loader, optimizer, epoch):
+    return
+
+def train(train_loader, optimizer, epoch):
     statelogger.info("epoch: {}, lr: {}".format(epoch, optimizer.param_groups[0]["lr"]))
 
     trainLoss = []
@@ -244,9 +251,9 @@ def train(train_loader, test_loader, optimizer, epoch):
             # logger.add_scalar('loss', loss.data[0], steps)
 
         if iteration % opt.step == 0:
-            data_temp = make_grid(data.data)
-            label_temp = make_grid(label.data)
-            output_temp = make_grid(output.data)
+            data_temp   = make_grid(data.data, nrow=4)
+            label_temp  = make_grid(label.data, nrow=4)
+            output_temp = make_grid(output.data, nrow=4)
 
             torchvision.utils.save_image(data_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_data.png".format(epoch, iteration))
             torchvision.utils.save_image(label_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_label.png".format(epoch, iteration))
@@ -255,7 +262,7 @@ def train(train_loader, test_loader, optimizer, epoch):
     trainLoss = np.asarray(trainLoss)
     return np.mean(trainLoss)
 
-def test(test_loader, epoch):
+def test(test_loader, epoch, criterion):
     psnrs = []
     ssims = []
     mses = []
@@ -270,8 +277,8 @@ def test(test_loader, epoch):
             output = model(data)
             output = torch.clamp(output, 0., 1.)
             
-            mse = nn.MSELoss()(output, label)
-            mses.append(mse.item())
+            mse = criterion(output, label).item()
+            mses.append(mse)
             
             output = output.squeeze(0).permute(1, 2, 0).cpu().numpy()
             label  = label.squeeze(0).permute(1, 2, 0).cpu().numpy()
