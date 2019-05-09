@@ -24,7 +24,51 @@ from model.rpnet import Net
   2. In pyTorch-0.4.0, numpy is doesn't support problem.
 """
 
-def predict():
+device = utils.selectDevice()
+
+def predict(opt):
+    checkpoint = os.path.join(opt.checkpoint, opt.pth + ".pth")
+    if not os.path.exists(checkpoint):
+        raise FileNotFoundError("File doesn't exists: {}".format(checkpoint))
+
+    # rb: Residual Blocks
+    net = Net(opt.rb).to(device)
+    net.load_state_dict(torch.load(checkpoint)['state_dict'])
+    net.eval()
+        
+    # Test photos: Default Reside
+    # Ignore .keep for folder
+    images = utils.load_all_image(opt.test)
+    if ".keep" in images:   images.remove(".keep")
+
+    # Output photos path
+    os.makedirs(opt.output, exist_ok=True)
+
+    print("==========> DeHazing, Target: {}".format(len(images)))
+    for im_path in tqdm(images):
+        filename = im_path.split('/')[-1]
+        im = Image.open(im_path)
+        w, h = im.size
+        
+        if opt.verbose:
+            print("==========> Input filename: {}".format(filename))
+            print("==========> Image shape: {}, {}".format(w, h))
+        
+        im = ToTensor()(im)
+        im = im.view(1, -1, w, h).to(device)
+        # im = im.cuda()
+        
+        with torch.no_grad():
+            im_dehaze = net(im)
+        
+        # Take the Image out from GPU.
+        im_dehaze = torch.clamp(im_dehaze, 0., 1.).cpu()
+        im_dehaze = ToPILImage()(im_dehaze.data[0])
+
+        im_dehaze.save(os.path.join(opt.output, filename))
+        print("==========> File saved: {}".format(os.path.join(opt.output, filename)))
+
+def main():
     parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
     parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
     parser.add_argument("--checkpoint", type=str, default="/media/disk1/EdwardLee/checkpoints/Indoor_18_16", help="root of model checkpoint")
@@ -51,68 +95,8 @@ def predict():
 
     opt = parser.parse_args()
     print(opt)
-    
-    """
-    Setting: 
-    1. Read I-HAZE_O-HAZE as model.
-    2. Only GPU-Cuda:0 is used in lab507
-    """
 
-    device = utils.selectDevice()
-
-    checkpoint = os.path.join(opt.checkpoint, opt.pth + ".pth")
-    if not os.path.exists(checkpoint):
-        raise FileNotFoundError("File doesn't exists: {}".format(checkpoint))
-
-    # rb: Residual Blocks
-    net = Net(opt.rb).to(device)
-    net.load_state_dict(torch.load(checkpoint)['state_dict'])
-    net.eval()
-    # net = nn.DataParallel(net, device_ids=[0]).cuda()
-    # print(net)
-
-    # if opt.cuda:
-    #     net = nn.DataParallel(net, device_ids=[i for i in range(opt.gpus)]).cuda()
-    # else:
-    #     net = net.cpu()
-        
-    # Test photos: Default Reside
-    images = utils.load_all_image(opt.test)
-
-    # Output photos
-    if not os.path.exists(opt.output):
-        os.mkdir(opt.output)
-
-    # Ignore .keep for folder
-    if ".keep" in images:
-        images.remove(".keep")
-
-    print("==========> DeHazing, Target: {}".format(len(images)))
-    for im_path in tqdm(images):
-        filename = im_path.split('/')[-1]
-        im = Image.open(im_path)
-        h, w = im.size
-        
-        if opt.verbose:
-            print("==========> Input filename: {}".format(filename))
-            print("==========> Image shape: {}, {}".format(h, w))
-        
-        im = ToTensor()(im)
-        im = im.view(1, -1, w, h).to(device)
-        # im = im.cuda()
-        
-        with torch.no_grad():
-            im_dehaze = net(im)
-        
-        # Take the Image out from GPU.
-        im_dehaze = torch.clamp(im_dehaze, 0., 1.).cpu()
-        im_dehaze = ToPILImage()(im_dehaze.data[0])
-
-        im_dehaze.save(os.path.join(opt.output, filename))
-        print("==========> File saved: {}".format(os.path.join(opt.output, filename)))
-
-def main():
-    predict()
+    predict(opt)
 
 if __name__ == "__main__":
     main()
