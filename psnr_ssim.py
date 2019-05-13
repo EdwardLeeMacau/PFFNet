@@ -24,8 +24,8 @@ def psnr_ssim(img_dehaze: Image, img_gt):
     dehaze = scipy.misc.fromimage(img_dehaze).astype(float) / 255.0
     gt     = scipy.misc.fromimage(img_gt).astype(float) / 255.0
 
-    print(dehaze.shape)
-    print(gt.shape)
+    # print(dehaze.shape)
+    # print(gt.shape)
 
     psnr = skimage.measure.compare_psnr(dehaze, gt)
     ssim = skimage.measure.compare_ssim(dehaze, gt, multichannel=True)
@@ -44,6 +44,8 @@ def val(dehazes, gts, outputpath):
             
             img_dehaze, img_gt = Image.open(dehaze), Image.open(gt)
             psnr, ssim = psnr_ssim(img_dehaze, img_gt)
+            psnrs.append(psnr)
+            ssims.append(ssim)
             print("PSNR: {}".format(psnr))
             print("SSIM: {}".format(ssim))
             

@@ -48,11 +48,10 @@ def predict(opt):
     for im_path in tqdm(images):
         filename = im_path.split('/')[-1]
         im = Image.open(im_path)
-        w, h = im.size
+        h, w = im.size
         
         if opt.verbose:
             print("==========> Input filename: {}".format(filename))
-            print("==========> Image shape: {}, {}".format(w, h))
         
         im = ToTensor()(im)
         im = im.view(1, -1, w, h).to(device)
@@ -62,8 +61,8 @@ def predict(opt):
             im_dehaze = net(im)
         
         # Take the Image out from GPU.
-        im_dehaze = torch.clamp(im_dehaze, 0., 1.).cpu()
-        im_dehaze = ToPILImage()(im_dehaze.data[0])
+        im_dehaze = torch.clamp(im_dehaze, 0., 1.).cpu().data[0]
+        im_dehaze = ToPILImage()(im_dehaze)
 
         im_dehaze.save(os.path.join(opt.output, filename))
         print("==========> File saved: {}".format(os.path.join(opt.output, filename)))
@@ -71,7 +70,7 @@ def predict(opt):
 def main():
     parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
     parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
-    parser.add_argument("--checkpoint", type=str, default="/media/disk1/EdwardLee/checkpoints/Indoor_18_16", help="root of model checkpoint")
+    parser.add_argument("--checkpoint", type=str, default="/media/disk1/EdwardLee/checkpoints/Indoor_augment_18_16", help="root of model checkpoint")
     parser.add_argument("--pth", type=str, help="choose the checkpoint")
     parser.add_argument("--test", type=str, default="/media/disk1/EdwardLee/IndoorTest/hazy", help="path to load test images")
     parser.add_argument("--cuda", default=True, help="Use cuda?")

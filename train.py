@@ -29,22 +29,25 @@ from model.rpnet import Net
 
 # Training settings
 parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
-parser.add_argument("--tag", type=str, default="Indoor", help="tag for this training")
-parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
+parser.add_argument("--tag", type=str, default="Indoor_512_20190512", help="tag for this training")
+parser.add_argument("--rb", type=int, default=12, help="number of residual blocks")
 parser.add_argument("--batchSize", type=int, default=16, help="training batch size")
-parser.add_argument("--nEpochs", type=int, default=100, help="number of epochs to train for")
+parser.add_argument("--nEpochs", type=int, default=30, help="number of epochs to train for")
 parser.add_argument("--lr", type=float, default=1e-4, help="Learning Rate. Default=1e-4")
 parser.add_argument("--step", type=int, default=1000, help="step to test the model performance. Default=2000")
 parser.add_argument("--cuda", default=True, help="Use cuda?")
 parser.add_argument("--gpus", type=int, default=1, help="nums of gpu to use")
-parser.add_argument("--resume", type=str, help="Path to checkpoint (default: none)")
+parser.add_argument("--resume", default="/media/disk1/EdwardLee/checkpoints/Indoor_512_20190512_12_16/1.pth", type=str, help="Path to checkpoint (default: none)")
 parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch number (useful on restarts)")
 parser.add_argument("--threads", type=int, default=8, help="Number of threads for data loader to use, Default: 1")
-parser.add_argument("--momentum", default=0.9, type=float, help="Momentum, Default: 0.9")
+parser.add_argument("--momentum", default=0.9, type=float, help="SGD Momentum, Default: 0.9")
 parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
-parser.add_argument("--train", default="/media/disk1/EdwardLee/IndoorTrain", type=str, help="path to load train datasets")
+parser.add_argument("--train", default="/media/disk1/EdwardLee/IndoorTrain_512", type=str, help="path to load train datasets")
 parser.add_argument("--val", default="/media/disk1/EdwardLee/IndoorVal", type=str, help="path to load val datasets")
 parser.add_argument("--test", default="/media/disk1/EdwardLee/IndoorTest", type=str, help="path to load test datasets")
+parser.add_argument("--checkpoints", default="/media/disk1/EdwardLee/checkpoints", type=str, help="path to save the checkpoints")
+parser.add_argument("--log_interval", type=int, default=10, help="interval per iterations to log the message")
+parser.add_argument("--save_interval", type=int, default=1, help="interval per epochs to save the model")
 # subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze")
 
 # ihazeparser = subparser.add_parser("I-Haze")
@@ -76,7 +79,7 @@ def main():
     
     # Tag_ResidualBlocks_BatchSize
     # name = "{}_{}_{}".format(opt.command, opt.rb, opt.batchSize)
-    name = "{}_{}_{}".format("Outdoor", opt.rb, opt.batchSize)
+    name = "{}_{}_{}".format(opt.tag, opt.rb, opt.batchSize)
 
     # logger = SummaryWriter("runs/" + name)
 
@@ -160,7 +163,7 @@ def main():
 
         # Train, save, val
         loss = train(train_loader, optimizer, epoch)
-        utils.save_checkpoint(model, "./media/disk1/EdwardLee/checkpoints", epoch, name)
+        utils.save_checkpoint(model, "/media/disk1/EdwardLee/checkpoints", epoch, name)
         mses, psnrs, ssims = test(val_loader, epoch, criterion)
 
         train_loss  = np.append(train_loss, np.array([loss]), axis=0)
@@ -206,7 +209,7 @@ def main():
         # Plot PSNR and SSIM
         plt.clf()
         plt.figure(figsize=(12.8, 7.2))
-        fig, axis1 = plt.subplots(sharex=True)
+        fig, axis1 = plt.subplots(sharex=True, figsize=(12.8, 7.2))
         axis1.set_xlabel('Epoch(s)')
         axis1.set_ylabel('Average PSNR')
         axis1.plot(epochs, psnr_means, label="PSNR", color='b')
@@ -215,7 +218,6 @@ def main():
         
         axis2 = axis1.twinx()
         axis2.plot(epochs, ssim_means, label="SSIM", color='r')
-        # axis2.plot(epochs, ssim_epochs, label="SSIM vs Epochs", color='r')
         axis2.set_ylabel('Average SSIM')
         axis2.tick_params()
             
@@ -246,7 +248,7 @@ def train(train_loader, optimizer, epoch):
         trainLoss.append(loss.item())
         optimizer.step()
 
-        if iteration % 10 == 0:
+        if iteration % opt.log_interval == 0:
             statelogger.info("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(train_loader), loss.item()))
             # logger.add_scalar('loss', loss.data[0], steps)
 
