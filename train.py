@@ -8,7 +8,6 @@ import argparse
 import logging
 import logging.config
 import os
-import pdb
 
 import numpy as np
 import torch
@@ -58,6 +57,9 @@ parser.add_argument("--save_interval", type=int, default=1, help="interval per e
 # ohazeparser.add_argument("--train", default="/media/disk1/EdwardLee/OutdoorTrain", type=str, help="path to load train datasets")
 # ohazeparser.add_argument("--test", default="/media/disk1/EdwardLee/OutdoorTest", type=str, help="path to load test datasets")
 
+opt = parser.parse_args()
+print(opt)
+
 # Set logger
 logging.config.fileConfig("logging.ini")
 statelogger = logging.getLogger(__name__)
@@ -68,9 +70,7 @@ cudnn.benchmark = True
 
 def main():
     global opt, name, model, criterion
-    opt = parser.parse_args()
-    print(opt)
-
+    
     train_loss  = np.empty(0, dtype=float)
     psnr_epochs = np.empty((0, 5), dtype=float)
     ssim_epochs = np.empty((0, 5), dtype=float)
@@ -81,8 +81,6 @@ def main():
     # name = "{}_{}_{}".format(opt.command, opt.rb, opt.batchSize)
     name = "{}_{}_{}".format(opt.tag, opt.rb, opt.batchSize)
 
-    # logger = SummaryWriter("runs/" + name)
-
     if opt.cuda and not torch.cuda.is_available():
         raise Exception("No GPU found, please run without --cuda")
 
@@ -90,8 +88,6 @@ def main():
     torch.manual_seed(seed)
     if opt.cuda:
         torch.cuda.manual_seed(seed)
-
-    cudnn.benchmark = True
 
     print("==========> Loading datasets")
 
@@ -114,6 +110,10 @@ def main():
     print("==========> Building model")
     model = Net(opt.rb)
     criterion = nn.MSELoss(size_average=True)
+    
+    # Perceptual Loss
+    # vgg16 = ...
+
 
     # optionally resume from a checkpoint
     if opt.resume:
@@ -163,7 +163,7 @@ def main():
 
         # Train, save, val
         loss = train(train_loader, optimizer, epoch)
-        utils.save_checkpoint(model, "/media/disk1/EdwardLee/checkpoints", epoch, name)
+        utils.save_checkpoint(model, opt.checkpoints, epoch, name)
         mses, psnrs, ssims = test(val_loader, epoch, criterion)
 
         train_loss  = np.append(train_loss, np.array([loss]), axis=0)
@@ -232,14 +232,14 @@ def train(train_loader, optimizer, epoch):
 
     trainLoss = []
 
-    for iteration, batch in enumerate(train_loader, 1):
+    for iteration, (data, label) in enumerate(train_loader, 1):
         model.train()
         model.zero_grad()
         optimizer.zero_grad()
 
         steps = len(train_loader) * (epoch - 1) + iteration
 
-        data, label = batch[0].to(device), batch[1].to(device)
+        data, label = data.to(device), label.to(device)
 
         output = model(data)
         loss = criterion(output, label)
@@ -248,11 +248,11 @@ def train(train_loader, optimizer, epoch):
         trainLoss.append(loss.item())
         optimizer.step()
 
-        if iteration % opt.log_interval == 0:
+        if steps % opt.log_interval == 0:
             statelogger.info("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(train_loader), loss.item()))
             # logger.add_scalar('loss', loss.data[0], steps)
 
-        if iteration % opt.step == 0:
+        if steps % opt.step == 0:
             data_temp   = make_grid(data.data, nrow=8)
             label_temp  = make_grid(label.data, nrow=8)
             output_temp = make_grid(output.data, nrow=8)
