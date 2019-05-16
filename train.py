@@ -153,12 +153,12 @@ def main():
     mse_iter   = np.empty((0, 5), dtype=float)
     iterations = np.empty(0, dtype=float)
 
-    print("==========> Pre-Testing")
-    mses, psnrs, ssims = test(test_loader, opt.start_epoch - 1, criterion)
-    mse_iters  = np.append(mse_iter, np.expand_dims(mses, axis=0), axis=0)
-    psnr_iters = np.append(psnr_iter, np.expand_dims(psnrs, axis=0), axis=0)
-    ssim_iters = np.append(ssim_iter, np.expand_dims(ssims, axis=0), axis=0)
-    iterations = np.append(iterations, np.array([opt.start_epoch - 1]), axis=0)
+    # print("==========> Pre-Testing")
+    # mses, psnrs, ssims = test(test_loader, opt.start_epoch - 1, criterion)
+    # mse_iters  = np.append(mse_iter, np.expand_dims(mses, axis=0), axis=0)
+    # psnr_iters = np.append(psnr_iter, np.expand_dims(psnrs, axis=0), axis=0)
+    # ssim_iters = np.append(ssim_iter, np.expand_dims(ssims, axis=0), axis=0)
+    # iterations = np.append(iterations, np.array([opt.start_epoch - 1]), axis=0)
 
     print("==========> Training")
     for epoch in range(opt.start_epoch, opt.nEpochs + 1):
@@ -167,7 +167,7 @@ def main():
 
         # Train, save and val
         # train_loss_epoch = train(train_loader, val_loader, optimizer, epoch)[0]
-        loss_iter, mse_iter, psnr_iter, ssim_iter, iterations = train(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iters, psnr_iters, ssim_iters, iterations)
+        loss_iter, mse_iter, psnr_iter, ssim_iter, iterations = train(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iterations)
         # utils.save_checkpoint(model, opt.checkpoints, epoch, name)
         # mses, psnrs, ssims = test(val_loader, epoch, criterion)
 
@@ -230,6 +230,9 @@ def train(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_
             # ----------------------------------------------------------
             # Plot TrainLoss, TestLoss and the minimum value of TestLoss
             # ----------------------------------------------------------
+            draw_graphs(loss_iter, mse_mean, psnr_mean, ssim_mean, iters, len(train_loader))
+
+            """
             plt.clf()
             plt.figure(figsize=(12.8, 7.2))
             plt.plot(iters[1:], loss_iter, label="TrainLoss", color='b')
@@ -258,8 +261,41 @@ def train(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_
             plt.legend(loc=0)
             plt.title("PSNR-SSIM vs Epochs")
             plt.savefig("psnr_ssim.png")
+            """
         
     return loss_iter, mse_iter, psnr_iter, ssim_iter, iters
+
+def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch):
+    plt.clf()
+    plt.figure(figsize=(12.8, 7.2))
+    plt.plot(x, train_loss, label="TrainLoss", color='b')
+    plt.plot(x, val_loss, label="ValLoss", color='r')
+    plt.plot(x, np.repeat(np.amin(val_loss), len(x)), ':')
+    plt.legend(loc=0)
+    plt.xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
+    plt.title("Loss vs Epochs")
+    plt.savefig("loss.png")
+
+    # Plot PSNR and SSIM
+    plt.clf()
+    plt.figure(figsize=(12.8, 7.2))
+    fig, axis1 = plt.subplots(sharex=True, figsize=(12.8, 7.2))
+    axis1.set_xlabel('Epoch(s) / Iteration: {}'.format(iters_per_epoch))
+    axis1.set_ylabel('Average PSNR')
+    axis1.plot(x, psnr, label="PSNR", color='b')
+    axis1.plot(x, np.repeat(np.amax(psnr), len(x)), ':')
+    axis1.tick_params()
+    
+    axis2 = axis1.twinx()
+    axis2.plot(x, ssim, label="SSIM", color='r')
+    axis2.set_ylabel('Average SSIM')
+    axis2.tick_params()
+        
+    plt.legend(loc=0)
+    plt.title("PSNR-SSIM vs Epochs")
+    plt.savefig("psnr_ssim.png")
+
+    return
 
 def test(test_loader, epoch, criterion):
     psnrs = []
