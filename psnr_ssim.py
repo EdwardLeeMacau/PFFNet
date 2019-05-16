@@ -14,7 +14,6 @@ from PIL import Image
 
 import utils
 
-
 """
 75 pth
 rp: 6 PSNR: 22.6392712102
@@ -23,9 +22,6 @@ rp: 6 PSNR: 22.6392712102
 def psnr_ssim(img_dehaze: Image, img_gt):
     dehaze = scipy.misc.fromimage(img_dehaze).astype(float) / 255.0
     gt     = scipy.misc.fromimage(img_gt).astype(float) / 255.0
-
-    # print(dehaze.shape)
-    # print(gt.shape)
 
     psnr = skimage.measure.compare_psnr(dehaze, gt)
     ssim = skimage.measure.compare_ssim(dehaze, gt, multichannel=True)
@@ -40,20 +36,19 @@ def val(dehazes, gts, outputpath):
     with open(outputpath, "w") as textfile:
         for _, (dehaze, gt) in enumerate(zip(dehazes, gts)):
             print("{} / {}".format(dehaze, gt))
-            textfile.write("{} / {}\n".format(dehaze, gt))
             
             img_dehaze, img_gt = Image.open(dehaze), Image.open(gt)
             psnr, ssim = psnr_ssim(img_dehaze, img_gt)
             psnrs.append(psnr)
             ssims.append(ssim)
-            print("PSNR: {}".format(psnr))
-            print("SSIM: {}".format(ssim))
-            
-            textfile.write("PSNR: {:.4f}, SSIM: {:.4f}\n".format(psnr, ssim))
-            # psnrs.append(psnr)
-            # ssims.append(ssim)
+            print("PSNR: {:.4f}".format(psnr))
+            print("SSIM: {:.4f}".format(ssim))
 
-        print("Average PSNR: {:.4f}, Average SSIM: {:.4f}".format(np.mean(psnrs), np.mean(ssims)))
+            textfile.write(dehaze.split("/")[-1])            
+            textfile.write("PSNR: {:.4f}, SSIM: {:.4f}\n".format(psnr, ssim))
+
+        print("Average PSNR: {:.4f}".format(np.mean(psnrs)))
+        print("Average SSIM: {:.4f}".format(np.mean(ssims)))
         textfile.write("Average PSNR: {:.4f}, Average SSIM: {:.4f}\n".format(np.mean(psnrs), np.mean(ssims)))
 
     return
@@ -67,11 +62,8 @@ def main():
     opt = parser.parse_args()
     print(opt)
 
-    dehazes = utils.load_all_image(opt.dehaze)
-    gts     = utils.load_all_image(opt.gt)
-
-    dehazes.sort()
-    gts.sort()
+    dehazes = utils.load_all_image(opt.dehaze).sort()
+    gts     = utils.load_all_image(opt.gt).sort()
 
     val(dehazes, gts, opt.output)
 

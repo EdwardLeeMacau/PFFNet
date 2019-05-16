@@ -17,6 +17,7 @@ from torch.autograd import Variable
 from torchvision.transforms import ToTensor, ToPILImage, Normalize, Resize
 
 from model.rpnet import Net
+from psnr_ssim import val
 
 """
   Some notes:
@@ -38,11 +39,11 @@ def predict(opt):
         
     # Test photos: Default Reside
     # Ignore .keep for folder
-    images = utils.load_all_image(opt.test)
+    images = utils.load_all_image(opt.hazy)
     if ".keep" in images:   images.remove(".keep")
 
     # Output photos path
-    os.makedirs(opt.output, exist_ok=True)
+    os.makedirs(opt.dehazy, exist_ok=True)
 
     print("==========> DeHazing, Target: {}".format(len(images)))
     for im_path in tqdm(images):
@@ -64,20 +65,22 @@ def predict(opt):
         im_dehaze = torch.clamp(im_dehaze, 0., 1.).cpu().data[0]
         im_dehaze = ToPILImage()(im_dehaze)
 
-        im_dehaze.save(os.path.join(opt.output, filename))
-        print("==========> File saved: {}".format(os.path.join(opt.output, filename)))
+        im_dehaze.save(os.path.join(opt.dehazy, filename))
+        print("==========> File saved: {}".format(os.path.join(opt.dehazy, filename)))
 
 def main():
     parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
     parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
     parser.add_argument("--checkpoint", type=str, default="/media/disk1/EdwardLee/checkpoints/Indoor_augment_18_16", help="root of model checkpoint")
     parser.add_argument("--pth", type=str, help="choose the checkpoint")
-    parser.add_argument("--test", type=str, default="/media/disk1/EdwardLee/IndoorTest/hazy", help="path to load test images")
+    parser.add_argument("--hazy", type=str, default="/media/disk1/EdwardLee/IndoorTest/hazy", help="path to load test images")
     parser.add_argument("--cuda", default=True, help="Use cuda?")
     parser.add_argument("--gpus", type=int, default=4, help="nums of gpu to use")
-    parser.add_argument("--output", type=str, default="/media/disk1/EdwardLee/Output", help="path to save output images")
+    parser.add_argument("--dehazy", type=str, default="/media/disk1/EdwardLee/Output", help="path to save output images")
     parser.add_argument("--verbose", default=True, help="increase the information verbosity")
-
+    parser.add_argument("--record", type=str, default="./psnr_ssim.txt", help="wrote the result to the textfile")
+    parser.add_argument("--gt", type=str, default="/media/disk1/EdwardLee/IndoorTest/gt", help="path to load gt images")
+    
     # subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze / SOTS")
 
     # ihazeparser = subparser.add_parser("I-Haze")
@@ -95,7 +98,16 @@ def main():
     opt = parser.parse_args()
     print(opt)
 
+    dehazes = utils.load_all_image(opt.dehaze).sort()
+    gts     = utils.load_all_image(opt.gt).sort()
+
+    # -----------------------------------------
+    # Generate the images
+    # Validate the performance on the test set
+    # -----------------------------------------
     predict(opt)
+    val(dehazes, gts, opt.record)
 
 if __name__ == "__main__":
+    os.system("clear")
     main()

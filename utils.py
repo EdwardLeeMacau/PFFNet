@@ -58,9 +58,12 @@ def load_all_image(path):
     return [join(path, x) for x in listdir(path) if is_image_file(x)]
 
 
-def save_checkpoint(model, root, epoch, model_folder):
+def save_checkpoint(model, root, epoch, model_folder, iteration=0):
     """ Only save the model and the epoch, but not the optimizer. """
-    model_out_path = os.path.join(root, model_folder, str(epoch)+".pth")
+    if iteration != 0:
+        model_out_path = os.path.join(root, model_folder, "{}_{}.pth".format(epoch, iteration))
+    else:
+        model_out_path = os.path.join(root, model_folder, "{}.pth".format(epoch))
 
     state_dict = model.module.state_dict()
     for key in state_dict.keys():

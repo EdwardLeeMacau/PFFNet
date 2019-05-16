@@ -36,8 +36,8 @@ with open("statistics.txt", "r") as textfile:
         
     
     # Plot the graphs, global setting
-    train_val_loss = "train_val_loss.png"
-    avg_psnr_ssim  = "avg_psnr_ssim.png"
+    train_val_loss = "loss.png"
+    avg_psnr_ssim  = "psnr_ssim.png"
     detail_psnr    = "detail_PSNR.png"
     detail_ssim    = "detail_SSIM.png"
 

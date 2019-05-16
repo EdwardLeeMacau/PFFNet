@@ -28,16 +28,17 @@ from model.rpnet import Net
 
 # Training settings
 parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
-parser.add_argument("--tag", type=str, default="Indoor_512_20190512", help="tag for this training")
+parser.add_argument("--tag", type=str, default="Indoor_512_Normalize_20190515", help="tag for this training")
 parser.add_argument("--rb", type=int, default=12, help="number of residual blocks")
 parser.add_argument("--batchSize", type=int, default=16, help="training batch size")
 parser.add_argument("--nEpochs", type=int, default=30, help="number of epochs to train for")
 parser.add_argument("--lr", type=float, default=1e-4, help="Learning Rate. Default=1e-4")
-parser.add_argument("--step", type=int, default=1000, help="step to test the model performance. Default=2000")
+parser.add_argument("--step", type=int, default=1000, help="step to test the model performance")
 parser.add_argument("--cuda", default=True, help="Use cuda?")
+parser.add_argument("--normalize", default=False, action="store_true", help="normalized the dataset images")
 parser.add_argument("--gpus", type=int, default=1, help="nums of gpu to use")
-parser.add_argument("--resume", default="/media/disk1/EdwardLee/checkpoints/Indoor_512_20190512_12_16/1.pth", type=str, help="Path to checkpoint (default: none)")
-parser.add_argument("--start-epoch", default=1, type=int, help="Manual epoch number (useful on restarts)")
+parser.add_argument("--resume", type=str, help="Path to checkpoint (default: none)")
+parser.add_argument("--start_epoch", default=1, type=int, help="Manual epoch number (useful on restarts)")
 parser.add_argument("--threads", type=int, default=8, help="Number of threads for data loader to use, Default: 1")
 parser.add_argument("--momentum", default=0.9, type=float, help="SGD Momentum, Default: 0.9")
 parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
@@ -70,15 +71,8 @@ cudnn.benchmark = True
 
 def main():
     global opt, name, model, criterion
-    
-    train_loss  = np.empty(0, dtype=float)
-    psnr_epochs = np.empty((0, 5), dtype=float)
-    ssim_epochs = np.empty((0, 5), dtype=float)
-    mse_epochs  = np.empty((0, 5), dtype=float)
-    epochs = np.empty(0, dtype=np.int64)
-    
-    # Tag_ResidualBlocks_BatchSize
-    # name = "{}_{}_{}".format(opt.command, opt.rb, opt.batchSize)
+
+    # Establish the folder    
     name = "{}_{}_{}".format(opt.tag, opt.rb, opt.batchSize)
 
     if opt.cuda and not torch.cuda.is_available():
@@ -90,18 +84,21 @@ def main():
         torch.cuda.manual_seed(seed)
 
     print("==========> Loading datasets")
-
-    train_dataset = DatasetFromFolder(opt.train, transform=Compose([
-        ToTensor()
-    ]))
-
-    val_dataset = DatasetFromFolder(opt.val, transform=Compose([
-        ToTensor()
-    ]))
-
-    test_dataset = DatasetFromFolder(opt.test, transform=Compose([
-        ToTensor()
-    ]))
+    # -----------------------------------------------------------------
+    # Normalization methods
+    #   input[channel] = (input[channel] - mean[channel]) / std[channel]
+    #
+    #   mean = [0.485, 0.456, 0.406]
+    #   std  = [0.229, 0.224, 0.225]
+    # -----------------------------------------------------------------
+    if opt.normalize:
+        img_transform = Compose([ToTensor(), Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    else:
+        img_transform = Compose([ToTensor()])
+    
+    train_dataset = DatasetFromFolder(opt.train, transform=img_transform)
+    val_dataset   = DatasetFromFolder(opt.val, transform=img_transform)
+    test_dataset  = DatasetFromFolder(opt.test, transform=img_transform)
 
     train_loader = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchSize, pin_memory=True, shuffle=True)
     val_loader   = DataLoader(dataset=val_dataset, num_workers=opt.threads, batch_size=1, pin_memory=True, shuffle=False)
@@ -113,7 +110,6 @@ def main():
     
     # Perceptual Loss
     # vgg16 = ...
-
 
     # optionally resume from a checkpoint
     if opt.resume:
@@ -149,85 +145,35 @@ def main():
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10], gamma=0.1)
 
+    # Extablish container
+    # train_loss = np.empty(0, dtype=float)
+    loss_iter  = np.empty(0, dtype=float)
+    psnr_iter  = np.empty((0, 5), dtype=float)
+    ssim_iter  = np.empty((0, 5), dtype=float)
+    mse_iter   = np.empty((0, 5), dtype=float)
+    iterations = np.empty(0, dtype=float)
+
     print("==========> Pre-Testing")
-    mses, psnrs, ssims = test(test_loader, 0, criterion)
-    mse_epochs  = np.append(mse_epochs, np.expand_dims(mses, axis=0), axis=0)
-    psnr_epochs = np.append(psnr_epochs, np.expand_dims(psnrs, axis=0), axis=0)
-    ssim_epochs = np.append(ssim_epochs, np.expand_dims(ssims, axis=0), axis=0)
-    epochs = np.append(epochs, np.array([0]), axis=0)
+    mses, psnrs, ssims = test(test_loader, opt.start_epoch - 1, criterion)
+    mse_iters  = np.append(mse_iter, np.expand_dims(mses, axis=0), axis=0)
+    psnr_iters = np.append(psnr_iter, np.expand_dims(psnrs, axis=0), axis=0)
+    ssim_iters = np.append(ssim_iter, np.expand_dims(ssims, axis=0), axis=0)
+    iterations = np.append(iterations, np.array([opt.start_epoch - 1]), axis=0)
 
     print("==========> Training")
     for epoch in range(opt.start_epoch, opt.nEpochs + 1):
-        # Adjust the learning
+        # Adjust the learning rate
         scheduler.step()
 
-        # Train, save, val
-        loss = train(train_loader, optimizer, epoch)
-        utils.save_checkpoint(model, opt.checkpoints, epoch, name)
-        mses, psnrs, ssims = test(val_loader, epoch, criterion)
-
-        train_loss  = np.append(train_loss, np.array([loss]), axis=0)
-        mse_epochs  = np.append(mse_epochs, np.expand_dims(mses, axis=0), axis=0)
-        psnr_epochs = np.append(psnr_epochs, np.expand_dims(psnrs, axis=0), axis=0)
-        ssim_epochs = np.append(ssim_epochs, np.expand_dims(ssims, axis=0), axis=0)
-        mse_means   = np.average(mse_epochs, axis=1)
-        psnr_means  = np.average(psnr_epochs, axis=1)
-        ssim_means  = np.average(ssim_epochs, axis=1)
-        epochs = np.append(epochs, np.array([epoch]), axis=0)
-
-        with open("statistics.txt", "w") as textfile:
-            textfile.write("Train Loss")
-            textfile.write(str(train_loss.tolist()))
-
-            textfile.write("\n")
-            textfile.write("MSE")
-            textfile.write(str(mse_epochs.tolist()))
-            
-            textfile.write("\n")
-            textfile.write("PSNR")
-            textfile.write(str(psnr_epochs.tolist()))
-            
-            textfile.write("\n")
-            textfile.write("SSIM")
-            textfile.write(str(ssim_epochs.tolist()))
-
-            textfile.write("\n")
-            textfile.write("Epochs")
-            textfile.write(str(epochs.tolist()))
-
-        # Plot TrainLoss and TestLoss
-        plt.clf()
-        plt.figure(figsize=(12.8, 7.2))
-        plt.plot(epochs[1:], train_loss, label="TrainLoss", color='b')
-        plt.plot(epochs, mse_means, label="ValLoss", color='r')
-        plt.plot(epochs, np.repeat(np.amin(mse_means), len(epochs)), ':')
-        plt.legend(loc=0)
-        plt.xlabel("Epoch(s)")
-        plt.title("Loss vs Epochs")
-        plt.savefig("loss.png")
-
-        # Plot PSNR and SSIM
-        plt.clf()
-        plt.figure(figsize=(12.8, 7.2))
-        fig, axis1 = plt.subplots(sharex=True, figsize=(12.8, 7.2))
-        axis1.set_xlabel('Epoch(s)')
-        axis1.set_ylabel('Average PSNR')
-        axis1.plot(epochs, psnr_means, label="PSNR", color='b')
-        axis1.plot(epochs, np.repeat(np.amax(psnr_means), len(epochs)), ':')
-        axis1.tick_params()
-        
-        axis2 = axis1.twinx()
-        axis2.plot(epochs, ssim_means, label="SSIM", color='r')
-        axis2.set_ylabel('Average SSIM')
-        axis2.tick_params()
-            
-        plt.legend(loc=0)
-        plt.title("PSNR-SSIM vs Epochs")
-        plt.savefig("psnr_ssim.png")
+        # Train, save and val
+        # train_loss_epoch = train(train_loader, val_loader, optimizer, epoch)[0]
+        loss_iter, mse_iter, psnr_iter, ssim_iter, iterations = train(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iters, psnr_iters, ssim_iters, iterations)
+        # utils.save_checkpoint(model, opt.checkpoints, epoch, name)
+        # mses, psnrs, ssims = test(val_loader, epoch, criterion)
 
     return
 
-def train(train_loader, optimizer, epoch):
+def train(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iters):
     statelogger.info("epoch: {}, lr: {}".format(epoch, optimizer.param_groups[0]["lr"]))
 
     trainLoss = []
@@ -261,8 +207,59 @@ def train(train_loader, optimizer, epoch):
             torchvision.utils.save_image(label_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_label.png".format(epoch, iteration))
             torchvision.utils.save_image(output_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_output.png".format(epoch, iteration))
 
-    trainLoss = np.asarray(trainLoss)
-    return np.mean(trainLoss)
+            # In epoch testing and saving (Newly added)
+            utils.save_checkpoint(model, opt.checkpoints, epoch, name, iteration)        
+            
+            mses, psnrs, ssims = test(val_loader, epoch, criterion)
+            loss_iter = np.append(loss_iter, np.array([np.mean(trainLoss)]), axis=0)
+            mse_iter  = np.append(mse_iter, np.expand_dims(mses, axis=0), axis=0)
+            psnr_iter = np.append(psnr_iter, np.expand_dims(psnrs, axis=0), axis=0)
+            ssim_iter = np.append(ssim_iter, np.expand_dims(ssims, axis=0), axis=0)
+            iters     = np.append(iters, np.array([steps / len(train_loader)]), axis=0)
+
+            trainLoss = []  # Clean the list 
+
+            mse_mean  = np.average(mse_iter, axis=1)
+            psnr_mean = np.average(psnr_iter, axis=1)
+            ssim_mean = np.average(ssim_iter, axis=1)
+            
+            with open("statistics.txt", "w") as textfile:
+                datas = [str(data.tolist()) for data in (loss_iter, mse_iter, psnr_iter, ssim_iter, iters)]
+                textfile.write("\n".join(datas))
+                
+            # ----------------------------------------------------------
+            # Plot TrainLoss, TestLoss and the minimum value of TestLoss
+            # ----------------------------------------------------------
+            plt.clf()
+            plt.figure(figsize=(12.8, 7.2))
+            plt.plot(iters[1:], loss_iter, label="TrainLoss", color='b')
+            plt.plot(iters, mse_mean, label="ValLoss", color='r')
+            plt.plot(iters, np.repeat(np.amin(mse_mean), len(iters)), ':')
+            plt.legend(loc=0)
+            plt.xlabel("Epoch(s) / Iteration: {}".format(len(train_loader)))
+            plt.title("Loss vs Epochs")
+            plt.savefig("loss.png")
+
+            # Plot PSNR and SSIM
+            plt.clf()
+            plt.figure(figsize=(12.8, 7.2))
+            fig, axis1 = plt.subplots(sharex=True, figsize=(12.8, 7.2))
+            axis1.set_xlabel('Epoch(s) / Iteration: {}'.format(len(train_loader)))
+            axis1.set_ylabel('Average PSNR')
+            axis1.plot(iters, psnr_mean, label="PSNR", color='b')
+            axis1.plot(iters, np.repeat(np.amax(psnr_mean), len(iters)), ':')
+            axis1.tick_params()
+            
+            axis2 = axis1.twinx()
+            axis2.plot(iters, ssim_mean, label="SSIM", color='r')
+            axis2.set_ylabel('Average SSIM')
+            axis2.tick_params()
+                
+            plt.legend(loc=0)
+            plt.title("PSNR-SSIM vs Epochs")
+            plt.savefig("psnr_ssim.png")
+        
+    return loss_iter, mse_iter, psnr_iter, ssim_iter, iters
 
 def test(test_loader, epoch, criterion):
     psnrs = []
@@ -275,6 +272,17 @@ def test(test_loader, epoch, criterion):
             statelogger.info("Testing: {}".format(iteration))
             data   = batch[0].to(device)
             label  = batch[1].to(device)
+
+            # -----------------------------------------------------------------
+            # Normalization methods
+            #   input[channel] = (input[channel] - mean[channel]) / std[channel]
+            #
+            #   mean = [0.485, 0.456, 0.406]
+            #   std  = [0.229, 0.224, 0.225]
+            # 
+            # Notes: 20190515
+            #   The original model doesn't set any activation function in the output layer.
+            # -----------------------------------------------------------------
 
             output = model(data)
             output = torch.clamp(output, 0., 1.)
