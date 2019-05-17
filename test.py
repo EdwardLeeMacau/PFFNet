@@ -98,8 +98,8 @@ def main():
     opt = parser.parse_args()
     print(opt)
 
-    dehazes = utils.load_all_image(opt.dehaze).sort()
-    gts     = utils.load_all_image(opt.gt).sort()
+    dehazes = sorted(utils.load_all_image(opt.dehazy))
+    gts     = sorted(utils.load_all_image(opt.gt))
 
     # -----------------------------------------
     # Generate the images

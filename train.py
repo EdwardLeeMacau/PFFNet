@@ -8,6 +8,8 @@ import argparse
 import logging
 import logging.config
 import os
+import pprint
+from datetime import date
 
 import numpy as np
 import torch
@@ -20,6 +22,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import (
     CenterCrop, Compose, Normalize, RandomCrop, Resize, ToTensor)
 # from tensorboardX import SummaryWriter
+import torchsummary
 from torchvision.utils import make_grid
 
 import utils
@@ -38,6 +41,8 @@ parser.add_argument("--cuda", default=True, help="Use cuda?")
 parser.add_argument("--normalize", default=False, action="store_true", help="normalized the dataset images")
 parser.add_argument("--gpus", type=int, default=1, help="nums of gpu to use")
 parser.add_argument("--resume", type=str, help="Path to checkpoint (default: none)")
+parser.add_argument("--milestones", type=int, nargs='*', default=[10], help="Which epoch to decay the learning rate")
+parser.add_argument("--gamma", type=float, default=0.1, help="The ratio of decaying learning rate everytime")
 parser.add_argument("--start_epoch", default=1, type=int, help="Manual epoch number (useful on restarts)")
 parser.add_argument("--threads", type=int, default=8, help="Number of threads for data loader to use, Default: 1")
 parser.add_argument("--momentum", default=0.9, type=float, help="SGD Momentum, Default: 0.9")
@@ -59,7 +64,7 @@ parser.add_argument("--save_interval", type=int, default=1, help="interval per e
 # ohazeparser.add_argument("--test", default="/media/disk1/EdwardLee/OutdoorTest", type=str, help="path to load test datasets")
 
 opt = parser.parse_args()
-print(opt)
+pprint.PrettyPrinter().pprint(opt)
 
 # Set logger
 logging.config.fileConfig("logging.ini")
@@ -72,22 +77,23 @@ cudnn.benchmark = True
 def main():
     global opt, name, model, criterion
 
-    # Establish the folder    
-    name = "{}_{}_{}".format(opt.tag, opt.rb, opt.batchSize)
+    # Establish the folder
+    name = "{}_{}_{}_{}".format(opt.tag, "%Y%m%d", opt.rb, opt.batchSize)
+    print("Name: {}".format(name))
 
     if opt.cuda and not torch.cuda.is_available():
         raise Exception("No GPU found, please run without --cuda")
 
-    seed = 1334
-    torch.manual_seed(seed)
-    if opt.cuda:
-        torch.cuda.manual_seed(seed)
+    # seed = 1334
+    # torch.manual_seed(seed)
+    # if opt.cuda: torch.cuda.manual_seed(seed)
 
     print("==========> Loading datasets")
     # -----------------------------------------------------------------
     # Normalization methods
     #   input[channel] = (input[channel] - mean[channel]) / std[channel]
     #
+    # For pytorch pretrained ImageNet Feature Extractor
     #   mean = [0.485, 0.456, 0.406]
     #   std  = [0.229, 0.224, 0.225]
     # -----------------------------------------------------------------
@@ -98,17 +104,19 @@ def main():
     
     train_dataset = DatasetFromFolder(opt.train, transform=img_transform)
     val_dataset   = DatasetFromFolder(opt.val, transform=img_transform)
-    test_dataset  = DatasetFromFolder(opt.test, transform=img_transform)
+    # test_dataset  = DatasetFromFolder(opt.test, transform=img_transform)
 
     train_loader = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchSize, pin_memory=True, shuffle=True)
     val_loader   = DataLoader(dataset=val_dataset, num_workers=opt.threads, batch_size=1, pin_memory=True, shuffle=False)
-    test_loader  = DataLoader(dataset=test_dataset, num_workers=opt.threads, batch_size=1, pin_memory=True, shuffle=False)
+    # test_loader  = DataLoader(dataset=test_dataset, num_workers=opt.threads, batch_size=1, pin_memory=True, shuffle=False)
 
     print("==========> Building model")
     model = Net(opt.rb)
     criterion = nn.MSELoss(size_average=True)
     
+    # -------------------------
     # Perceptual Loss
+    # -------------------------
     # vgg16 = ...
 
     # optionally resume from a checkpoint
@@ -143,31 +151,25 @@ def main():
 
     print("==========> Setting Optimizer")
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr)
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10], gamma=0.1)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=opt.milestones, gamma=opt.gamma)
 
     # Extablish container
-    # train_loss = np.empty(0, dtype=float)
     loss_iter  = np.empty(0, dtype=float)
     psnr_iter  = np.empty((0, 5), dtype=float)
     ssim_iter  = np.empty((0, 5), dtype=float)
     mse_iter   = np.empty((0, 5), dtype=float)
     iterations = np.empty(0, dtype=float)
 
-    # print("==========> Pre-Testing")
-    # mses, psnrs, ssims = test(test_loader, opt.start_epoch - 1, criterion)
-    # mse_iters  = np.append(mse_iter, np.expand_dims(mses, axis=0), axis=0)
-    # psnr_iters = np.append(psnr_iter, np.expand_dims(psnrs, axis=0), axis=0)
-    # ssim_iters = np.append(ssim_iter, np.expand_dims(ssims, axis=0), axis=0)
-    # iterations = np.append(iterations, np.array([opt.start_epoch - 1]), axis=0)
+    print("==========> Training setting")
+    train_details(opt, "./train_details/{}".format(name))
 
     print("==========> Training")
     for epoch in range(opt.start_epoch, opt.nEpochs + 1):
-        # Adjust the learning rate
         scheduler.step()
 
-        # Train, save and val
-        # train_loss_epoch = train(train_loader, val_loader, optimizer, epoch)[0]
-        loss_iter, mse_iter, psnr_iter, ssim_iter, iterations = train(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iterations)
+        loss_iter, mse_iter, psnr_iter, ssim_iter, iterations = train(
+            train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iterations)
+        
         # utils.save_checkpoint(model, opt.checkpoints, epoch, name)
         # mses, psnrs, ssims = test(val_loader, epoch, criterion)
 
@@ -231,39 +233,24 @@ def train(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_
             # Plot TrainLoss, TestLoss and the minimum value of TestLoss
             # ----------------------------------------------------------
             draw_graphs(loss_iter, mse_mean, psnr_mean, ssim_mean, iters, len(train_loader))
-
-            """
-            plt.clf()
-            plt.figure(figsize=(12.8, 7.2))
-            plt.plot(iters[1:], loss_iter, label="TrainLoss", color='b')
-            plt.plot(iters, mse_mean, label="ValLoss", color='r')
-            plt.plot(iters, np.repeat(np.amin(mse_mean), len(iters)), ':')
-            plt.legend(loc=0)
-            plt.xlabel("Epoch(s) / Iteration: {}".format(len(train_loader)))
-            plt.title("Loss vs Epochs")
-            plt.savefig("loss.png")
-
-            # Plot PSNR and SSIM
-            plt.clf()
-            plt.figure(figsize=(12.8, 7.2))
-            fig, axis1 = plt.subplots(sharex=True, figsize=(12.8, 7.2))
-            axis1.set_xlabel('Epoch(s) / Iteration: {}'.format(len(train_loader)))
-            axis1.set_ylabel('Average PSNR')
-            axis1.plot(iters, psnr_mean, label="PSNR", color='b')
-            axis1.plot(iters, np.repeat(np.amax(psnr_mean), len(iters)), ':')
-            axis1.tick_params()
-            
-            axis2 = axis1.twinx()
-            axis2.plot(iters, ssim_mean, label="SSIM", color='r')
-            axis2.set_ylabel('Average SSIM')
-            axis2.tick_params()
-                
-            plt.legend(loc=0)
-            plt.title("PSNR-SSIM vs Epochs")
-            plt.savefig("psnr_ssim.png")
-            """
         
     return loss_iter, mse_iter, psnr_iter, ssim_iter, iters
+
+def train_details(opt, record_path):
+    pprint.PrettyPrinter().pprint(opt)
+    
+    makedir_list = []
+    record_folder = os.path.dirname(record_path)
+    while not os.path.exists(record_folder):
+        makedir_list.append(record_folder)
+        record_folder = os.path.dirname(record_folder)
+
+    for folder in makedir_list.reverse():
+        os.makedirs(folder)
+
+    with open(record_path, "w") as textfile:
+        textfile.write(opt)
+        torchsummary.summary(model, (3, 512, 512), batch_size=16, device=device)
 
 def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch):
     plt.clf()
