@@ -28,13 +28,12 @@ from psnr_ssim import val
 device = utils.selectDevice()
 
 def predict(opt):
-    checkpoint = os.path.join(opt.checkpoint, opt.pth + ".pth")
-    if not os.path.exists(checkpoint):
-        raise FileNotFoundError("File doesn't exists: {}".format(checkpoint))
+    if not os.path.exists(opt.checkpoint):
+        raise FileNotFoundError("File doesn't exists: {}".format(opt.checkpoint))
 
     # rb: Residual Blocks
     net = Net(opt.rb).to(device)
-    net.load_state_dict(torch.load(checkpoint)['state_dict'])
+    net.load_state_dict(torch.load(opt.checkpoint)['state_dict'])
     net.eval()
         
     # Test photos: Default Reside
@@ -43,7 +42,15 @@ def predict(opt):
     if ".keep" in images:   images.remove(".keep")
 
     # Output photos path
-    os.makedirs(opt.dehazy, exist_ok=True)
+    makedirs = []
+    folder = opt.dehazy
+    while not os.path.exists(folder):
+        makedirs.append(folder)
+        folder = os.path.dirname(folder)
+    
+    if len(makedirs) > 0:
+        makedirs, folder = makedirs[:-1], makedirs[-1]
+        os.makedirs(folder, exist_ok=True)
 
     print("==========> DeHazing, Target: {}".format(len(images)))
     for im_path in tqdm(images):
@@ -51,8 +58,7 @@ def predict(opt):
         im = Image.open(im_path)
         h, w = im.size
         
-        if opt.verbose:
-            print("==========> Input filename: {}".format(filename))
+        print("==========> Input filename: {}".format(filename))
         
         im = ToTensor()(im)
         im = im.view(1, -1, w, h).to(device)
@@ -71,15 +77,16 @@ def predict(opt):
 def main():
     parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
     parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
-    parser.add_argument("--checkpoint", type=str, default="/media/disk1/EdwardLee/checkpoints/Indoor_augment_18_16", help="root of model checkpoint")
-    parser.add_argument("--pth", type=str, help="choose the checkpoint")
+    parser.add_argument("--checkpoint", type=str, default="/media/disk1/EdwardLee/checkpoints/Indoor_512_18_16", help="root of model checkpoint")
     parser.add_argument("--hazy", type=str, default="/media/disk1/EdwardLee/IndoorTest/hazy", help="path to load test images")
     parser.add_argument("--cuda", default=True, help="Use cuda?")
-    parser.add_argument("--gpus", type=int, default=4, help="nums of gpu to use")
+    parser.add_argument("--gpus", type=int, default=8, help="nums of gpu to use")
     parser.add_argument("--dehazy", type=str, default="/media/disk1/EdwardLee/Output", help="path to save output images")
-    parser.add_argument("--verbose", default=True, help="increase the information verbosity")
     parser.add_argument("--record", type=str, default="./psnr_ssim.txt", help="wrote the result to the textfile")
     parser.add_argument("--gt", type=str, default="/media/disk1/EdwardLee/IndoorTest/gt", help="path to load gt images")
+    parser.add_argument("--normalize", action="store_true", default=False, help="pre / post normalization of the images")
+    parser.add_argument("--detail", default="./train_details", help="path to read the training details")
+    parser.add_argument("--activation", default="LeakyReLU", help="the activation of the model")
     
     # subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze / SOTS")
 
@@ -96,7 +103,11 @@ def main():
     # sotsparser.add_argument("--test", default="/media/disk1/EdwardLee/dataset/reside/SOTS/indoor", type=str, help="path to load test datasets")
 
     opt = parser.parse_args()
-    print(opt)
+    tag = os.path.basename(opt.checkpoint)
+    opt.dehazy = os.path.join(opt.dehazy, tag)
+
+    for item, value in vars(opt).items():
+        print("{:16} {}".format(item, value))
 
     dehazes = sorted(utils.load_all_image(opt.dehazy))
     gts     = sorted(utils.load_all_image(opt.gt))

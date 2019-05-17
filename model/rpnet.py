@@ -1,3 +1,9 @@
+"""
+  FileName     [ rpnet.py ]
+  PackageName  [ PFFNet ]
+  Synopsis     [ Dehaze model structure. ]
+"""
+
 import torch
 import torch.nn as nn
 from model.net import ConvLayer, UpsampleConvLayer, ResidualBlock
@@ -14,12 +20,12 @@ class MeanShift(nn.Conv2d):
             params.requires_grad = False
 
 class Net(nn.Module):
-    def __init__(self, res_blocks=18):
+    def __init__(self, res_blocks=18, activation=nn.LeakyReLU(0.2)):
         super(Net, self).__init__()
 
-        rgb_mean = (0.5204, 0.5167, 0.5129)
-        self.sub_mean = MeanShift(1., rgb_mean, -1)
-        self.add_mean = MeanShift(1., rgb_mean, 1)
+        # rgb_mean = (0.5204, 0.5167, 0.5129)
+        # self.sub_mean = MeanShift(1., rgb_mean, -1)
+        # self.add_mean = MeanShift(1., rgb_mean, 1)
 
         self.conv_input = ConvLayer(3, 16, kernel_size=11, stride=1)
         self.conv2x = ConvLayer(16, 32, kernel_size=3, stride=2)
@@ -39,7 +45,7 @@ class Net(nn.Module):
 
         self.conv_output = ConvLayer(16, 3, kernel_size=3, stride=1)
 
-        self.relu = nn.LeakyReLU(0.2)
+        self.relu = activation
 
     def forward(self, x):
         x = self.relu(self.conv_input(x))

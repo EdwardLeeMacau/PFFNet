@@ -1,5 +1,21 @@
+"""
+  FileName     [ net.py ]
+  PackageName  [ PFFNet ]
+  Synopsis     [ Basic units of the neural networks ]
+
+  Layers:
+    1. ConvLayer
+    2. UpsampleConvLayer
+    3. ResidualBlocks
+"""
+
 import torch
 import torch.nn as nn
+
+# --------------------------
+# Notes:
+#   PReLU: LeakyReLU with a learnable alpha value
+# --------------------------
 
 class ConvLayer(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride):
@@ -28,11 +44,11 @@ class UpsampleConvLayer(torch.nn.Module):
 
 
 class ResidualBlock(torch.nn.Module):
-    def __init__(self, channels):
+    def __init__(self, channels, activation=nn.PReLU()):
         super(ResidualBlock, self).__init__()
         self.conv1 = ConvLayer(channels, channels, kernel_size=3, stride=1)
         self.conv2 = ConvLayer(channels, channels, kernel_size=3, stride=1)
-        self.relu = nn.PReLU()
+        self.relu = activation
 
     def forward(self, x):
         residual = x

@@ -1,3 +1,9 @@
+"""
+  FileName     [ data.py ]
+  PackageName  [ PFFNet ]
+  Synopsis     [ Provide definition of dataset. ]
+"""
+
 import argparse
 import os
 import time
@@ -10,8 +16,8 @@ from torch.utils.data import DataLoader
 
 # Training settings
 parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
-parser.add_argument("--train", default="./IndoorTrain", type=str, help="path to load train datasets")
-parser.add_argument("--test", default="./IndoorTest", type=str, help="path to load test datasets")
+parser.add_argument("--train", default="/media/disk1/EdwardLee/IndoorTrain_512", type=str, help="path to load train datasets")
+parser.add_argument("--test", default="/media/disk1/EdwardLee/IndoorTest", type=str, help="path to load test datasets")
 parser.add_argument("--batchSize", type=int, default=16, help="training batch size")
 parser.add_argument("--threads", default=4, help="Number of threads for data loader to use")
 args = parser.parse_args()
