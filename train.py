@@ -11,6 +11,8 @@ import os
 import pprint
 from datetime import date
 
+from tqdm import tqdm
+
 import numpy as np
 import torch
 import torchvision
@@ -49,7 +51,7 @@ parser.add_argument("--momentum", default=0.9, type=float, help="SGD Momentum, D
 parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
 parser.add_argument("--train", default="/media/disk1/EdwardLee/IndoorTrain_512", type=str, help="path to load train datasets")
 parser.add_argument("--val", default="/media/disk1/EdwardLee/IndoorVal_512", type=str, help="path to load val datasets")
-parser.add_argument("--test", default="/media/disk1/EdwardLee/IndoorTest", type=str, help="path to load test datasets")
+# parser.add_argument("--test", default="/media/disk1/EdwardLee/IndoorTest", type=str, help="path to load test datasets")
 parser.add_argument("--checkpoints", default="/media/disk1/EdwardLee/checkpoints", type=str, help="path to save the checkpoints")
 parser.add_argument("--log_interval", type=int, default=10, help="interval per iterations to log the message")
 parser.add_argument("--save_interval", type=int, default=1, help="interval per epochs to save the model")
@@ -108,7 +110,7 @@ def main():
     # test_dataset  = DatasetFromFolder(opt.test, transform=img_transform)
 
     train_loader = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchSize, pin_memory=True, shuffle=True)
-    val_loader   = DataLoader(dataset=val_dataset, num_workers=opt.threads, batch_size=1, pin_memory=True, shuffle=False)
+    val_loader   = DataLoader(dataset=val_dataset, num_workers=opt.threads, batch_size=opt.batchSize, pin_memory=True, shuffle=False)
     # test_loader  = DataLoader(dataset=test_dataset, num_workers=opt.threads, batch_size=1, pin_memory=True, shuffle=False)
 
     print("==========> Building model")
@@ -156,9 +158,9 @@ def main():
 
     # Extablish container
     loss_iter  = np.empty(0, dtype=float)
-    psnr_iter  = np.empty((0, 5), dtype=float)
-    ssim_iter  = np.empty((0, 5), dtype=float)
-    mse_iter   = np.empty((0, 5), dtype=float)
+    psnr_iter  = np.empty(0, dtype=float)
+    ssim_iter  = np.empty(0, dtype=float)
+    mse_iter   = np.empty(0, dtype=float)
     iterations = np.empty(0, dtype=float)
 
     print("==========> Training setting")
@@ -182,6 +184,9 @@ def train(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_
     trainLoss = []
 
     for iteration, (data, label) in enumerate(train_loader, 1):
+        # ------------------
+        # Train the network
+        # ------------------
         model.train()
         model.zero_grad()
         optimizer.zero_grad()
@@ -197,6 +202,9 @@ def train(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_
         trainLoss.append(loss.item())
         optimizer.step()
 
+        # -----------------------------------------------------
+        # Log the training message, testing, saving the network
+        # -----------------------------------------------------
         if steps % opt.log_interval == 0:
             statelogger.info("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(train_loader), loss.item()))
             # logger.add_scalar('loss', loss.data[0], steps)
@@ -215,16 +223,16 @@ def train(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_
             
             mses, psnrs, ssims = test(val_loader, epoch, criterion)
             loss_iter = np.append(loss_iter, np.array([np.mean(trainLoss)]), axis=0)
-            mse_iter  = np.append(mse_iter, np.expand_dims(mses, axis=0), axis=0)
-            psnr_iter = np.append(psnr_iter, np.expand_dims(psnrs, axis=0), axis=0)
-            ssim_iter = np.append(ssim_iter, np.expand_dims(ssims, axis=0), axis=0)
+            mse_iter  = np.append(mse_iter, np.array([mses]), axis=0)
+            psnr_iter = np.append(psnr_iter, np.array([psnrs]), axis=0)
+            ssim_iter = np.append(ssim_iter, np.array([ssims]), axis=0)
             iters     = np.append(iters, np.array([steps / len(train_loader)]), axis=0)
 
             trainLoss = []  # Clean the list 
 
-            mse_mean  = np.average(mse_iter, axis=1)
-            psnr_mean = np.average(psnr_iter, axis=1)
-            ssim_mean = np.average(ssim_iter, axis=1)
+            # mse_mean  = np.average(mse_iter, axis=1)
+            # psnr_mean = np.average(psnr_iter, axis=1)
+            # ssim_mean = np.average(ssim_iter, axis=1)
             
             with open(os.path.join(opt.detail, name, "statistics.txt"), "w") as textfile:
                 datas = [str(data.tolist()) for data in (loss_iter, mse_iter, psnr_iter, ssim_iter, iters)]
@@ -233,7 +241,7 @@ def train(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_
             # ----------------------------------------------------------
             # Plot TrainLoss, TestLoss and the minimum value of TestLoss
             # ----------------------------------------------------------
-            draw_graphs(loss_iter, mse_mean, psnr_mean, ssim_mean, iters, len(train_loader))
+            draw_graphs(loss_iter, mse_iter, psnr_iter, ssim_iter, iters, len(train_loader))
         
     return loss_iter, mse_iter, psnr_iter, ssim_iter, iters
 
@@ -260,7 +268,8 @@ def details(opt, path):
     return folder
 
 def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch, 
-            loss_filename="loss.png", psnr_filename="psnr_ssim.png"):
+            loss_filename="loss.png", loss_log_filename="loss_log.png", psnr_filename="psnr_ssim.png"):
+    # Linear scale of loss curve
     plt.clf()
     plt.figure(figsize=(12.8, 7.2))
     plt.plot(x, train_loss, label="TrainLoss", color='b')
@@ -271,7 +280,19 @@ def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch,
     plt.title("Loss vs Epochs")
     plt.savefig(os.path.join(opt.detail, name, loss_filename))
 
-    # Plot PSNR and SSIM
+    # Log scale of loss curve
+    plt.clf()
+    plt.figure(figsize=(12.8, 7.2))
+    plt.plot(x, train_loss, label="TrainLoss", color='b')
+    plt.plot(x, val_loss, label="ValLoss", color='r')
+    plt.plot(x, np.repeat(np.amin(val_loss), len(x)), ':')
+    plt.legend(loc=0)
+    plt.xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
+    plt.yscale('log')
+    plt.title("Loss vs Epochs")
+    plt.savefig(os.path.join(opt.detail, name, loss_log_filename))
+
+    # Linear scale of PSNR, SSIM
     plt.clf()
     plt.figure(figsize=(12.8, 7.2))
     fig, axis1 = plt.subplots(sharex=True, figsize=(12.8, 7.2))
@@ -292,17 +313,17 @@ def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch,
 
     return
 
-def test(test_loader, epoch, criterion):
+def test(loader, epoch, criterion):
     psnrs = []
     ssims = []
     mses = []
     model.eval()
 
     with torch.no_grad():
-        for iteration, batch in enumerate(test_loader, 1):
-            statelogger.info("Testing: {}".format(iteration))
-            data   = batch[0].to(device)
-            label  = batch[1].to(device)
+        for (data, label) in tqdm(loader):
+            batchsize = data.shape[0]
+
+            data, label = data.to(device), label.to(device)
 
             # -----------------------------------------------------------------
             # Normalization methods
@@ -314,7 +335,6 @@ def test(test_loader, epoch, criterion):
             # Notes: 20190515
             #   The original model doesn't set any activation function in the output layer.
             # -----------------------------------------------------------------
-
             output = model(data)
             output = torch.clamp(output, 0., 1.)
             
@@ -327,11 +347,11 @@ def test(test_loader, epoch, criterion):
             # psnr = 10 * np.log10(1.0 / mse.item())
             # psnrs.append(psnr)
 
-            # Newly Added.
-            psnr = compare_psnr(label, output)
-            ssim = compare_ssim(label, output, multichannel=True)
-            psnrs.append(psnr)
-            ssims.append(ssim)
+            for i in range(batchsize):
+                psnr = compare_psnr(label[i], output[i])
+                ssim = compare_ssim(label[i], output[i], multichannel=True)
+                psnrs.append(psnr)
+                ssims.append(ssim)
         
         psnr_mean = np.mean(psnrs)
         mse_mean  = np.mean(mses)
@@ -341,7 +361,7 @@ def test(test_loader, epoch, criterion):
         statelogger.info("[Vaild] epoch: {}, psnr: {}".format(epoch, psnr_mean))
         statelogger.info("[Vaild] epoch: {}, ssim: {}".format(epoch, ssim_mean))
 
-    return np.array(mses), np.array(psnrs), np.array(ssims)
+    return np.mean(mses), np.mean(psnrs), np.mean(ssims)
 
 if __name__ == "__main__":
     os.system('clear')
