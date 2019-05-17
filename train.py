@@ -31,7 +31,7 @@ from model.rpnet import Net
 
 # Training settings
 parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
-parser.add_argument("--tag", type=str, default="Indoor_512_Normalize_20190515", help="tag for this training")
+parser.add_argument("--tag", type=str, default="Indoor_512", help="tag for this training")
 parser.add_argument("--rb", type=int, default=12, help="number of residual blocks")
 parser.add_argument("--batchSize", type=int, default=16, help="training batch size")
 parser.add_argument("--nEpochs", type=int, default=30, help="number of epochs to train for")
@@ -48,11 +48,13 @@ parser.add_argument("--threads", type=int, default=8, help="Number of threads fo
 parser.add_argument("--momentum", default=0.9, type=float, help="SGD Momentum, Default: 0.9")
 parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
 parser.add_argument("--train", default="/media/disk1/EdwardLee/IndoorTrain_512", type=str, help="path to load train datasets")
-parser.add_argument("--val", default="/media/disk1/EdwardLee/IndoorVal", type=str, help="path to load val datasets")
+parser.add_argument("--val", default="/media/disk1/EdwardLee/IndoorVal_512", type=str, help="path to load val datasets")
 parser.add_argument("--test", default="/media/disk1/EdwardLee/IndoorTest", type=str, help="path to load test datasets")
 parser.add_argument("--checkpoints", default="/media/disk1/EdwardLee/checkpoints", type=str, help="path to save the checkpoints")
 parser.add_argument("--log_interval", type=int, default=10, help="interval per iterations to log the message")
 parser.add_argument("--save_interval", type=int, default=1, help="interval per epochs to save the model")
+parser.add_argument("--detail", default="./train_details", help="the root directory to save the training details")
+parser.add_argument("--activation", default="LeakyReLU", help="the activation function use at training")
 # subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze")
 
 # ihazeparser = subparser.add_parser("I-Haze")
@@ -64,7 +66,6 @@ parser.add_argument("--save_interval", type=int, default=1, help="interval per e
 # ohazeparser.add_argument("--test", default="/media/disk1/EdwardLee/OutdoorTest", type=str, help="path to load test datasets")
 
 opt = parser.parse_args()
-pprint.PrettyPrinter().pprint(opt)
 
 # Set logger
 logging.config.fileConfig("logging.ini")
@@ -78,8 +79,8 @@ def main():
     global opt, name, model, criterion
 
     # Establish the folder
-    name = "{}_{}_{}_{}".format(opt.tag, "%Y%m%d", opt.rb, opt.batchSize)
-    print("Name: {}".format(name))
+    name = "{}_{}_{}_{}".format(opt.tag, date.today().strftime("%Y%m%d"), opt.rb, opt.batchSize)
+    # print("Name: {}".format(name))
 
     if opt.cuda and not torch.cuda.is_available():
         raise Exception("No GPU found, please run without --cuda")
@@ -161,7 +162,7 @@ def main():
     iterations = np.empty(0, dtype=float)
 
     print("==========> Training setting")
-    train_details(opt, "./train_details/{}".format(name))
+    details(opt, "./train_details/{}/{}".format(name, "train_setting.txt"))
 
     print("==========> Training")
     for epoch in range(opt.start_epoch, opt.nEpochs + 1):
@@ -225,7 +226,7 @@ def train(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_
             psnr_mean = np.average(psnr_iter, axis=1)
             ssim_mean = np.average(ssim_iter, axis=1)
             
-            with open("statistics.txt", "w") as textfile:
+            with open(os.path.join(opt.detail, name, "statistics.txt"), "w") as textfile:
                 datas = [str(data.tolist()) for data in (loss_iter, mse_iter, psnr_iter, ssim_iter, iters)]
                 textfile.write("\n".join(datas))
                 
@@ -236,23 +237,30 @@ def train(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_
         
     return loss_iter, mse_iter, psnr_iter, ssim_iter, iters
 
-def train_details(opt, record_path):
-    pprint.PrettyPrinter().pprint(opt)
+def details(opt, path):
+    makedirs = []
     
-    makedir_list = []
-    record_folder = os.path.dirname(record_path)
-    while not os.path.exists(record_folder):
-        makedir_list.append(record_folder)
-        record_folder = os.path.dirname(record_folder)
+    folder = os.path.dirname(path)
+    while not os.path.exists(folder):
+        makedirs.append(folder)
+        folder = os.path.dirname(folder)
 
-    for folder in makedir_list.reverse():
+    while len(makedirs) > 0:
+        makedirs, folder = makedirs[:-1], makedirs[-1]
         os.makedirs(folder)
 
-    with open(record_path, "w") as textfile:
-        textfile.write(opt)
-        torchsummary.summary(model, (3, 512, 512), batch_size=16, device=device)
+    with open(path, "w") as textfile:
+        for item, values in vars(opt).items():
+            msg = "{:16} {}".format(item, values)
+            print(msg)
+            textfile.write(msg)
 
-def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch):
+    # torchsummary.summary(model, (3, 512, 512), batch_size=16, device='cuda')
+
+    return folder
+
+def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch, 
+            loss_filename="loss.png", psnr_filename="psnr_ssim.png"):
     plt.clf()
     plt.figure(figsize=(12.8, 7.2))
     plt.plot(x, train_loss, label="TrainLoss", color='b')
@@ -261,7 +269,7 @@ def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch):
     plt.legend(loc=0)
     plt.xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
     plt.title("Loss vs Epochs")
-    plt.savefig("loss.png")
+    plt.savefig(os.path.join(opt.detail, name, loss_filename))
 
     # Plot PSNR and SSIM
     plt.clf()
@@ -280,7 +288,7 @@ def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch):
         
     plt.legend(loc=0)
     plt.title("PSNR-SSIM vs Epochs")
-    plt.savefig("psnr_ssim.png")
+    plt.savefig(os.path.join(opt.detail, name, psnr_filename))
 
     return
 

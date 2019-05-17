@@ -140,8 +140,8 @@ if __name__ == "__main__":
     parser.add_argument("--location", type=int, default=5000, help="how many location coordinate to sample")
     parser.add_argument("--size", type=int, default=512, help="the size when cropping images")
     parser.add_argument("--stride", type=int, default=256, help="the stride when cropping images")
-    parser.add_argument("--random", action="store_true")
-    parser.add_argument("--step", action="store_true")
+    parser.add_argument("--random", action="store_true", help="use the random cropping to generate the images")
+    parser.add_argument("--step", action="store_true", help="use fixed stride to crop the images")
 
     domainparser  = parser.add_subparsers(required=True, dest="domain")
     
@@ -164,7 +164,8 @@ if __name__ == "__main__":
                             default="/media/disk1/EdwardLee/OutdoorTrain")
 
     args = parser.parse_args()
-    print(args)
+    for item, values in vars(args).items():
+        print("{:16} {}".format(item, values))
 
     # ----------------------------------------------------------
     # Check folders here, make the directories if don't exist.
@@ -211,10 +212,10 @@ if __name__ == "__main__":
     splits = os.listdir(args.hazy)
 
     if args.step:
-        print("Executing: augments")
+        # print("Executing: augments")
         Parallel(-1)(delayed(augments)(sp) for sp in splits)
     elif args.random:
-        print("Executing: random_augments")
-        # Parallel(-1)(delayed(random_augments)(sp) for sp in splits)
-        for sp in splits:
-            random_augments(sp)
+        # print("Executing: random_augments")
+        Parallel(-1)(delayed(random_augments)(sp) for sp in splits)
+        # for sp in splits:
+        #     random_augments(sp)

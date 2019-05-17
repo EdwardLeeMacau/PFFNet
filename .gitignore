@@ -14,6 +14,10 @@
 # Description File
 *.pptx
 
+# Library
+pytorch-summary
+torchsummary
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
