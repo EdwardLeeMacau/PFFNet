@@ -221,11 +221,12 @@ def train(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_
             # In epoch testing and saving (Newly added)
             utils.save_checkpoint(model, opt.checkpoints, epoch, name, iteration)        
             
-            mses, psnrs, ssims = test(val_loader, epoch, criterion)
+            # mses, psnrs, ssims = test(val_loader, epoch, criterion)
+            mses, psnrs = test(val_loader, epoch, criterion)
             loss_iter = np.append(loss_iter, np.array([np.mean(trainLoss)]), axis=0)
             mse_iter  = np.append(mse_iter, np.array([mses]), axis=0)
             psnr_iter = np.append(psnr_iter, np.array([psnrs]), axis=0)
-            ssim_iter = np.append(ssim_iter, np.array([ssims]), axis=0)
+            # ssim_iter = np.append(ssim_iter, np.array([ssims]), axis=0)
             iters     = np.append(iters, np.array([steps / len(train_loader)]), axis=0)
 
             trainLoss = []  # Clean the list 
@@ -295,20 +296,25 @@ def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch,
     # Linear scale of PSNR, SSIM
     plt.clf()
     plt.figure(figsize=(12.8, 7.2))
-    fig, axis1 = plt.subplots(sharex=True, figsize=(12.8, 7.2))
-    axis1.set_xlabel('Epoch(s) / Iteration: {}'.format(iters_per_epoch))
-    axis1.set_ylabel('Average PSNR')
-    axis1.plot(x, psnr, label="PSNR", color='b')
-    axis1.plot(x, np.repeat(np.amax(psnr), len(x)), ':')
-    axis1.tick_params()
     
-    axis2 = axis1.twinx()
-    axis2.plot(x, ssim, label="SSIM", color='r')
-    axis2.set_ylabel('Average SSIM')
-    axis2.tick_params()
+    plt.plot(x, psnr, label="PSNR", color='b')
+    plt.plot(x, np.repeat(np.amax(psnr), len(x)), ':')
+    plt.xlabel("Epochs(s) / Iteration: {}".format(iters_per_epoch))
+    plt.title("PSNR vs Epochs")
+
+    # fig, axis1 = plt.subplots(sharex=True, figsize=(12.8, 7.2))
+    # axis1.set_xlabel('Epoch(s) / Iteration: {}'.format(iters_per_epoch))
+    # axis1.set_ylabel('Average PSNR')
+    # axis1.plot(x, psnr, label="PSNR", color='b')
+    # axis1.plot(x, np.repeat(np.amax(psnr), len(x)), ':')
+    # axis1.tick_params()
+    # axis2 = axis1.twinx()
+    # axis2.plot(x, ssim, label="SSIM", color='r')
+    # axis2.set_ylabel('Average SSIM')
+    # axis2.tick_params()
         
     plt.legend(loc=0)
-    plt.title("PSNR-SSIM vs Epochs")
+    # plt.title("PSNR-SSIM vs Epochs")
     plt.savefig(os.path.join(opt.detail, name, psnr_filename))
 
     return
@@ -341,27 +347,28 @@ def test(loader, epoch, criterion):
             mse = criterion(output, label).item()
             mses.append(mse)
             
-            output = output.squeeze(0).permute(1, 2, 0).cpu().numpy()
-            label  = label.squeeze(0).permute(1, 2, 0).cpu().numpy()
+            # (batchsize, width, height, channel)
+            output = output.permute(0, 2, 3, 1).cpu().numpy()
+            label  = label.permute(0, 2, 3, 1).cpu().numpy()
 
-            # psnr = 10 * np.log10(1.0 / mse.item())
-            # psnrs.append(psnr)
+            psnr = 10 * np.log10(1.0 / mse)
+            psnrs.append(psnr)
 
-            for i in range(batchsize):
-                psnr = compare_psnr(label[i], output[i])
-                ssim = compare_ssim(label[i], output[i], multichannel=True)
-                psnrs.append(psnr)
-                ssims.append(ssim)
+            # for i in range(batchsize):
+            #     psnr = compare_psnr(label[i], output[i])
+            #     ssim = compare_ssim(label[i], output[i], multichannel=True)
+            #     psnrs.append(psnr)
+            #     ssims.append(ssim)
         
         psnr_mean = np.mean(psnrs)
         mse_mean  = np.mean(mses)
-        ssim_mean = np.mean(ssims)
+        # ssim_mean = np.mean(ssims)
 
         statelogger.info("[Vaild] epoch: {}, mse: {}".format(epoch, mse_mean))
         statelogger.info("[Vaild] epoch: {}, psnr: {}".format(epoch, psnr_mean))
-        statelogger.info("[Vaild] epoch: {}, ssim: {}".format(epoch, ssim_mean))
+        # statelogger.info("[Vaild] epoch: {}, ssim: {}".format(epoch, ssim_mean))
 
-    return np.mean(mses), np.mean(psnrs), np.mean(ssims)
+    return np.mean(mses), np.mean(psnrs) #, np.mean(ssims)
 
 if __name__ == "__main__":
     os.system('clear')
