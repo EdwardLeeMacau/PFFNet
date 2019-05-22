@@ -217,18 +217,24 @@ def train_eval(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, 
             layer_names, mean, std = [], [], []
 
             for layer_name, param in model.named_parameters():
-                layer_names.append(layer_name.split('.')[1:])
+                layer_names.append('.'.join(layer_name.split('.')[1:]))
                 
                 values = param.grad.detach().view(-1).cpu().numpy()
                 mean.append(np.mean(values))
                 std.append(np.std(values))
-
+            
+            # pprint.PrettyPrinter().pprint(layer_names)
             plt.clf()
             plt.figure(figsize=(12.8, 7.2))
-            plt.table(rowLabels=["Mean", "STD"], 
-                    colLabels=layer_names,
-                    cellText=np.concatenate((mean, std), axis=0))
-            plt.savefig("./{}/{}/grad.png".format(opt.detail, name))
+            plt.bar(np.arange(len(std)), np.asarray(std), 0.5)
+            plt.savefig("./{}/{}/grad_std_{}.png".format(opt.detail, name, str(steps).zfill(len(str(opt.nEpochs * len(train_loader))))))
+            # plt.table(rowLabels=["Mean", "STD"], 
+            #         colLabels=layer_names,
+            #         cellText=np.asarray([mean, std], dtype=np.float32))
+            plt.clf()
+            blt.figure(figsize=(12.8, 7.2))
+            plt.bar(np.arange(len(mean)), np.asarray(std), 0.5)
+            plt.savefig("./{}/{}/grad_mean_{}.png".format(opt.detail, name, str(steps).zfill(len(str(opt.nEpochs * len(train_loader))))))
 
         if steps % opt.save_interval == 0:
             data_temp   = make_grid(data.data, nrow=8)
