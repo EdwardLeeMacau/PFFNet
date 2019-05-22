@@ -47,9 +47,10 @@ parser.add_argument("--pretrained", type=str, help="path to pretrained model (de
 # Message logging, model saving setting
 parser.add_argument("--tag", type=str, default="Indoor_512", help="tag for this training")
 parser.add_argument("--checkpoints", default="/media/disk1/EdwardLee/checkpoints", type=str, help="path to save the checkpoints")
-parser.add_argument("--val_interval", type=int, default=1000, help="step to test the model performance")
+parser.add_argument("--val_interval", type=int, default=6250, help="step to test the model performance")
 parser.add_argument("--log_interval", type=int, default=10, help="interval per iterations to log the message")
-parser.add_argument("--save_interval", type=int, default=1000, help="interval per epochs to save the model")
+parser.add_argument("--grad_interval", type=int, default=100, help="interval per iterations to draw the gradient")
+parser.add_argument("--save_interval", type=int, default=1000, help="interval per iterations to save the model")
 parser.add_argument("--detail", default="./train_details", help="the root directory to save the training details")
 # Device setting
 parser.add_argument("--cuda", default=True, help="Use cuda?")
@@ -83,11 +84,10 @@ device = utils.selectDevice()
 cudnn.benchmark = True
 
 def main():
-    global opt, name, model, criterion, writer
+    global opt, name, model, criterion
 
     # Establish the folder and the summarywriter
     name    = "{}_{}_{}_{}".format(opt.tag, date.today().strftime("%Y%m%d"), opt.rb, opt.batchSize)
-    writer  = SummaryWriter("./{}/{}".format(opt.detail, name))
     
     if opt.cuda and not torch.cuda.is_available():
         raise Exception("No GPU found, please run without --cuda")
@@ -184,7 +184,7 @@ def main():
     return
 
 def train_eval(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iters):
-    writer.add_scalar("learning_rate", optimizer.param_groups[0]["lr"], epoch)
+    print("learning_rate", optimizer.param_groups[0]["lr"], epoch)
     
     trainLoss = []
 
@@ -207,19 +207,28 @@ def train_eval(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, 
         trainLoss.append(loss.item())
         optimizer.step()
 
-        # -----------------------------------------------------
-        # Log the training message, testing, saving the network
-        # -----------------------------------------------------
+        # ------------------------------------------------------------------------------
+        # Log the training message, gradient of each layer, testing, saving the network
+        # ------------------------------------------------------------------------------
         if steps % opt.log_interval == 0:
             print("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(train_loader), loss.item()))
             
-            # Log layer gradient
-            for layer_name, param in model.named_parameters(): 
-                plt.clf()
-                plt.hist(param.grad)
-                plt.savefig('./{}/{}/{}_grad.png'.format(opt.detail, name, layer_name))
-            
-            writer.add_scalar('Train/loss', loss.item(), steps)
+        if steps % opt.grad_interval == 0:
+            layer_names, mean, std = [], [], []
+
+            for layer_name, param in model.named_parameters():
+                layer_names.append(layer_name.split('.')[1:])
+                
+                values = param.grad.detach().view(-1).cpu().numpy()
+                mean.append(np.mean(values))
+                std.append(np.std(values))
+
+            plt.clf()
+            plt.figure(figsize=(12.8, 7.2))
+            plt.table(rowLabels=["Mean", "STD"], 
+                    colLabels=layer_names,
+                    cellText=np.concatenate((mean, std), axis=0))
+            plt.savefig("./{}/{}/grad.png".format(opt.detail, name))
 
         if steps % opt.save_interval == 0:
             data_temp   = make_grid(data.data, nrow=8)
@@ -256,7 +265,7 @@ def train_eval(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, 
             # ----------------------------------------------------------
             # Plot TrainLoss, TestLoss and the minimum value of TestLoss
             # ----------------------------------------------------------
-            draw_graphs(loss_iter, mse_iter, psnr_iter, ssim_iter, iters)
+            draw_graphs(loss_iter, mse_iter, psnr_iter, ssim_iter, iters, len(train_loader))
             
             # (Deprecated)
             # writer.add_scalar('Train/Loss', trainLoss, steps / len(train_loader))
