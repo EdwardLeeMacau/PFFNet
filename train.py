@@ -47,15 +47,15 @@ parser.add_argument("--pretrained", type=str, help="path to pretrained model (de
 # Message logging, model saving setting
 parser.add_argument("--tag", type=str, default="Indoor_512", help="tag for this training")
 parser.add_argument("--checkpoints", default="/media/disk1/EdwardLee/checkpoints", type=str, help="path to save the checkpoints")
-parser.add_argument("--step", type=int, default=1000, help="step to test the model performance")
+parser.add_argument("--val_interval", type=int, default=1000, help="step to test the model performance")
 parser.add_argument("--log_interval", type=int, default=10, help="interval per iterations to log the message")
-parser.add_argument("--save_interval", type=int, default=1, help="interval per epochs to save the model")
+parser.add_argument("--save_interval", type=int, default=1000, help="interval per epochs to save the model")
 parser.add_argument("--detail", default="./train_details", help="the root directory to save the training details")
 # Device setting
 parser.add_argument("--cuda", default=True, help="Use cuda?")
 parser.add_argument("--gpus", type=int, default=1, help="nums of gpu to use")
 parser.add_argument("--threads", type=int, default=8, help="Number of threads for data loader to use, Default: 1")
-parser.add_arugment("--fixrandomseed", default=False, help="train with fix random seed")
+parser.add_argument("--fixrandomseed", default=False, help="train with fix random seed")
 # Dataset loading, pretrain model setting
 parser.add_argument("--resume", type=str, help="Path to checkpoint (default: none)")
 parser.add_argument("--train", default="/media/disk1/EdwardLee/IndoorTrain_512", type=str, help="path to load train datasets")
@@ -177,6 +177,7 @@ def main():
         loss_iter, mse_iter, psnr_iter, ssim_iter, iterations = train_eval(
             train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iterations)
         
+        # (Deprecated)
         # utils.save_checkpoint(model, opt.checkpoints, epoch, name)
         # mses, psnrs, ssims = test(val_loader, epoch, criterion)
 
@@ -211,7 +212,13 @@ def train_eval(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, 
         # -----------------------------------------------------
         if steps % opt.log_interval == 0:
             print("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(train_loader), loss.item()))
-            writer.add_scalar('Train_loss', loss.data[0], steps)
+            
+            for layer_name, param in model.named_parameters(): 
+                plt.clf()
+                plt.hist(param.grad)
+                plt.savefig('./{}/{}/{}_grad.png'.format(opt.detail, name, layer_name))
+            
+            writer.add_scalar('Train/loss', loss.item(), steps)
 
         if steps % opt.save_interval == 0:
             data_temp   = make_grid(data.data, nrow=8)
@@ -225,7 +232,7 @@ def train_eval(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, 
             # In epoch testing and saving (Newly added)
             utils.save_checkpoint(model, opt.checkpoints, epoch, name, iteration)        
             
-        if steps % opt.step == 0:
+        if steps % opt.val_interval == 0:
             # mses, psnrs, ssims = test(val_loader, epoch, criterion)
             mse, psnr = test(val_loader, epoch, criterion)
             loss_iter = np.append(loss_iter, np.array([np.mean(trainLoss)]), axis=0)
@@ -248,13 +255,25 @@ def train_eval(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, 
             # ----------------------------------------------------------
             # Plot TrainLoss, TestLoss and the minimum value of TestLoss
             # ----------------------------------------------------------
-            writer.add_scalar('Train_Loss', trainLoss, steps / len(train_loader))
-            writer.add_scalar('Val_Loss', mse, steps / len(train_loader))
-            writer.add_scalar('Val_PSNR', psnr, steps / len(train_loader))
+            draw_graphs(loss_iter, mse_iter, psnr_iter, ssim_iter, iters)
+            
+            # (Deprecated)
+            # writer.add_scalar('Train/Loss', trainLoss, steps / len(train_loader))
+            # writer.add_scalar('Val/Loss', mse, steps / len(train_loader))
+            # writer.add_scalar('Val/PSNR', psnr, steps / len(train_loader))
 
     return loss_iter, mse_iter, psnr_iter, ssim_iter, iters
 
 def details(opt, path):
+    """
+      Show and marked down the training settings
+
+      Params:
+      - opt: The namespace of the train setting (Usually argparser)
+      - path: the path output textfile
+
+      Return: None
+    """
     makedirs = []
     
     folder = os.path.dirname(path)
@@ -271,10 +290,11 @@ def details(opt, path):
             msg = "{:16} {}".format(item, values)
             print(msg)
             textfile.write(msg)
-
+    
+    print(model)
     # torchsummary.summary(model, (3, 512, 512), batch_size=16, device='cuda')
-
-    return folder
+    
+    return
 
 def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch, 
             loss_filename="loss.png", loss_log_filename="loss_log.png", psnr_filename="psnr.png"):
