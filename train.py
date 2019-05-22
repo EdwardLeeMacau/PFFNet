@@ -212,21 +212,13 @@ def train_eval(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, 
         # -----------------------------------------------------
         if steps % opt.log_interval == 0:
             print("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(train_loader), loss.item()))
-<<<<<<< HEAD
             
+            # Log layer gradient
             for layer_name, param in model.named_parameters(): 
                 plt.clf()
                 plt.hist(param.grad)
                 plt.savefig('./{}/{}/{}_grad.png'.format(opt.detail, name, layer_name))
             
-=======
-            # Log the gradient
-            for layer_name, param in model.named_parameters(): 
-                writer.add_histogram(layer_name, param.grad, steps)
-                plt.clf()
-                plt.hist(param.grad)
-                plt.savefig('./{}/{}/{}_grad.png'.format(opt.detail, name, layer_name))
->>>>>>> bdc58755a3fa4f7bde5fe233ceb04914299079e9
             writer.add_scalar('Train/loss', loss.item(), steps)
 
         if steps % opt.save_interval == 0:
@@ -264,18 +256,12 @@ def train_eval(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, 
             # ----------------------------------------------------------
             # Plot TrainLoss, TestLoss and the minimum value of TestLoss
             # ----------------------------------------------------------
-<<<<<<< HEAD
             draw_graphs(loss_iter, mse_iter, psnr_iter, ssim_iter, iters)
             
             # (Deprecated)
             # writer.add_scalar('Train/Loss', trainLoss, steps / len(train_loader))
             # writer.add_scalar('Val/Loss', mse, steps / len(train_loader))
             # writer.add_scalar('Val/PSNR', psnr, steps / len(train_loader))
-=======
-            writer.add_scalar('Train/Loss', trainLoss, steps / len(train_loader))
-            writer.add_scalar('Val/Loss', mse, steps / len(train_loader))
-            writer.add_scalar('Val/PSNR', psnr, steps / len(train_loader))
->>>>>>> bdc58755a3fa4f7bde5fe233ceb04914299079e9
 
     return loss_iter, mse_iter, psnr_iter, ssim_iter, iters
 
