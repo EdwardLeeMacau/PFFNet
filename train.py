@@ -214,27 +214,33 @@ def train_eval(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, 
             print("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(train_loader), loss.item()))
             
         if steps % opt.grad_interval == 0:
-            layer_names, mean, std = [], [], []
+            layer_names, mean, abs_mean, std = [], [], [], []
 
             for layer_name, param in model.named_parameters():
                 layer_names.append('.'.join(layer_name.split('.')[1:]))
                 
                 values = param.grad.detach().view(-1).cpu().numpy()
                 mean.append(np.mean(values))
+                abs_mean.append(np.mean(np.absolute(values)))
                 std.append(np.std(values))
             
             # pprint.PrettyPrinter().pprint(layer_names)
             plt.clf()
-            plt.figure(figsize=(12.8, 7.2))
+            plt.figure(figsize=(19.2, 10.8))
+            plt.subplot(3, 1, 1)
             plt.bar(np.arange(len(std)), np.asarray(std), 0.5)
-            plt.savefig("./{}/{}/grad_std_{}.png".format(opt.detail, name, str(steps).zfill(len(str(opt.nEpochs * len(train_loader))))))
+            plt.title("STD vs layer")
+            plt.subplot(3, 1, 2)
+            plt.bar(np.arange(len(mean)), np.asarray(mean), 0.5)
+            plt.title("Mean vs layer")
+            plt.subplot(3, 1, 3)
+            plt.bar(np.arange(len(abs_mean)), np.asarray(abs_mean), 0.5)
+            plt.title("Mean(Abs()) vs layer")
+            # plt.savefig("./{}/{}/grad_std_{}.png".format(opt.detail, name, str(steps).zfill(len(str(opt.nEpochs * len(train_loader))))))
             # plt.table(rowLabels=["Mean", "STD"], 
             #         colLabels=layer_names,
             #         cellText=np.asarray([mean, std], dtype=np.float32))
-            plt.clf()
-            plt.figure(figsize=(12.8, 7.2))
-            plt.bar(np.arange(len(mean)), np.asarray(std), 0.5)
-            plt.savefig("./{}/{}/grad_mean_{}.png".format(opt.detail, name, str(steps).zfill(len(str(opt.nEpochs * len(train_loader))))))
+            plt.savefig("./{}/{}/grad_{}.png".format(opt.detail, name, str(steps).zfill(len(str(opt.nEpochs * len(train_loader))))))
 
         if steps % opt.save_interval == 0:
             data_temp   = make_grid(data.data, nrow=8)
