@@ -77,7 +77,7 @@ def predict(opt):
 def main():
     parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
     parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
-    parser.add_argument("--checkpoint", type=str, default="/media/disk1/EdwardLee/checkpoints/Indoor_512_18_16", help="root of model checkpoint")
+    parser.add_argument("--checkpoint", type=str, help="root of model checkpoint")
     parser.add_argument("--hazy", type=str, default="/media/disk1/EdwardLee/IndoorTest/hazy", help="path to load test images")
     parser.add_argument("--cuda", default=True, help="Use cuda?")
     parser.add_argument("--gpus", type=int, default=8, help="nums of gpu to use")
@@ -91,32 +91,34 @@ def main():
     # subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze / SOTS")
 
     # ihazeparser = subparser.add_parser("I-Haze")
-    # ihazeparser.add_argument("--checkpoint", default="/media/disk1/EdwardLee/checkpoints/Indoor_18_16", type=str, help="path to load train datasets")
-    # ihazeparser.add_argument("--test", default="/media/disk1/EdwardLee/IndoorTest", type=str, help="path to load test datasets")
+    # ihazeparser.add_argument("--hazy", default="/media/disk1/EdwardLee/IndoorTest/hazy", type=str, help="path to load test datasets")
 
     # ohazeparser = subparser.add_parser("O-Haze")
-    # ohazeparser.add_argument("--checkpoint", default="/media/disk1/EdwardLee/checkpoints/Outdoor_18_16", type=str, help="path to load train datasets")
-    # ohazeparser.add_argument("--test", default="/media/disk1/EdwardLee/OutdoorTest", type=str, help="path to load test datasets")
+    # ohazeparser.add_argument("--hazy", default="/media/disk1/EdwardLee/OutdoorTest/hazy", type=str, help="path to load test datasets")
 
     # sotsparser = subparser.add_parser("SOTS")
-    # sotsparser.add_argument("--checkpoint", default="/media/disk1/EdwardLee/checkpoints/Indoor_18_16", type=str, help="path to load train datasets")
-    # sotsparser.add_argument("--test", default="/media/disk1/EdwardLee/dataset/reside/SOTS/indoor", type=str, help="path to load test datasets")
+    # sotsparser.add_argument("--hazy", default="/media/disk1/EdwardLee/dataset/reside/SOTS/indoor", type=str, help="path to load test datasets")
 
     opt = parser.parse_args()
-    tag = os.path.basename(opt.checkpoint)
-    opt.dehazy = os.path.join(opt.dehazy, tag)
+    tag = os.path.basename(os.path.dirname(opt.checkpoint))
+    num_checkpoint = os.path.basename(opt.checkpoint).split('.')[0]
+    opt.dehazy     = os.path.join(opt.dehazy, tag, num_checkpoint)
 
     for item, value in vars(opt).items():
         print("{:16} {}".format(item, value))
 
-    dehazes = sorted(utils.load_all_image(opt.dehazy))
-    gts     = sorted(utils.load_all_image(opt.gt))
+    hazes = sorted(utils.load_all_image(opt.hazy))
+    gts   = sorted(utils.load_all_image(opt.gt))
 
     # -----------------------------------------
     # Generate the images
-    # Validate the performance on the test set
     # -----------------------------------------
     predict(opt)
+
+    # ----------------------------------------
+    # Vaildate the performance on the test set
+    # ---------------------------------------
+    dehazes = sorted(utils.load_all_image(opt.dehazy))
     val(dehazes, gts, opt.record)
 
 if __name__ == "__main__":

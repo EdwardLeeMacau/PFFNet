@@ -12,7 +12,6 @@ import pprint
 from datetime import date
 
 import numpy as np
-import tensorboardX
 import torch
 import torchsummary
 import torchvision
@@ -44,6 +43,8 @@ parser.add_argument("--gamma", type=float, default=0.1, help="The ratio of decay
 parser.add_argument("--start_epoch", default=1, type=int, help="Manual epoch number (useful on restarts)")
 parser.add_argument("--momentum", default=0.9, type=float, help="SGD Momentum, Default: 0.9")
 parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
+parser.add_argument("--weight_decay", type=float, default=1e-5, help="The weight penalty in the training")
+parser.add_argument("--optimizer", type=str, default="Adam", help="Choose the optimizer")
 # Message logging, model saving setting
 parser.add_argument("--tag", type=str, default="Indoor_512", help="tag for this training")
 parser.add_argument("--checkpoints", default="/media/disk1/EdwardLee/checkpoints", type=str, help="path to save the checkpoints")
@@ -53,7 +54,7 @@ parser.add_argument("--grad_interval", type=int, default=100, help="interval per
 parser.add_argument("--save_interval", type=int, default=1000, help="interval per iterations to save the model")
 parser.add_argument("--detail", default="./train_details", help="the root directory to save the training details")
 # Device setting
-parser.add_argument("--cuda", default=True, help="Use cuda?")
+parser.add_argument("--cuda", type=bool, default=True, help="Use cuda?")
 parser.add_argument("--gpus", type=int, default=1, help="nums of gpu to use")
 parser.add_argument("--threads", type=int, default=8, help="Number of threads for data loader to use, Default: 1")
 parser.add_argument("--fixrandomseed", default=False, help="train with fix random seed")
@@ -157,7 +158,13 @@ def main():
         criterion = criterion.cpu()
 
     print("==========> Setting Optimizer")
-    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr)
+    if opt.optimizer == "Adam":
+        optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, weight_decay=opt.weight_decay)
+    elif opt.optimizer == "SGD":
+        optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, weight_decay=opt.weigth_decay)
+    else:
+        raise argparse.ArgumentError
+    print("==========> Optimizer {}".format(opt.optimizer))
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=opt.milestones, gamma=opt.gamma)
 
     # Extablish container
@@ -252,7 +259,7 @@ def train_eval(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, 
             torchvision.utils.save_image(output_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_output.png".format(epoch, iteration))
 
             # In epoch testing and saving (Newly added)
-            utils.save_checkpoint(model, opt.checkpoints, epoch, name, iteration)        
+            utils.save_checkpoint(model, opt.checkpoints, str(epoch).zfill(len(opt.nEpochs)), name, str(iteration).zfill(len(str(len(train_loader)))))
             
         if steps % opt.val_interval == 0:
             # mses, psnrs, ssims = test(val_loader, epoch, criterion)
@@ -310,10 +317,11 @@ def details(opt, path):
     with open(path, "w") as textfile:
         for item, values in vars(opt).items():
             msg = "{:16} {}".format(item, values)
+            
             print(msg)
-            textfile.write(msg)
+            textfile.write(msg + '\n')
     
-    print(model)
+    # print(model)
     # torchsummary.summary(model, (3, 512, 512), batch_size=16, device='cuda')
     
     return

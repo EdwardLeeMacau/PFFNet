@@ -9,21 +9,42 @@ import csv
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+import argparse
 
-with open("statistics.txt", "r") as textfile:
+parser = argparse.ArgumentParser()
+parser.add_argument("--file", type=str)
+parser.add_argument("--ranking", type=int, default=5)
+parser.add_argument("--detail", type=str)
+
+opt = parser.parse_args()
+
+with open(opt.detail, "r") as textfile:
+    print(textfile.read())
+
+with open(opt.file, "r") as textfile:
     lines = textfile.readlines()
     
-    trainloss = ast.literal_eval(lines[0])
-    test_mse  = ast.literal_eval(lines[1])
-    test_psnr = ast.literal_eval(lines[2])
-    test_ssim = ast.literal_eval(lines[3])
-    avg_mse   = np.average(test_mse, axis=1)
-    avg_psnr  = np.average(test_psnr, axis=1)
-    avg_ssim  = np.average(test_ssim, axis=1)
-    std_mse   = np.std(test_mse, axis=1)
-    std_psnr  = np.std(test_psnr, axis=1)
-    std_ssim  = np.std(test_ssim, axis=1)
+    trainloss = np.asarray(ast.literal_eval(lines[0]), dtype=np.float)
+    val_mse   = np.asarray(ast.literal_eval(lines[1]), dtype=np.float)
+    val_psnr  = np.asarray(ast.literal_eval(lines[2]), dtype=np.float)
+    val_ssim  = np.asarray(ast.literal_eval(lines[3]), dtype=np.float)
+    # avg_mse   = np.average(test_mse, axis=1)
+    # avg_psnr  = np.average(test_psnr, axis=1)
+    # avg_ssim  = np.average(test_ssim, axis=1)
+    # std_mse   = np.std(test_mse, axis=1)
+    # std_psnr  = np.std(test_psnr, axis=1)
+    # std_ssim  = np.std(test_ssim, axis=1)
     epochs    = ast.literal_eval(lines[4])
+
+    # Show the maximum psnr and its epochs
+    # print("Max PSNR: {}, Epochs: {}".format(max(val_psnr), np.where(val_psnr == max(val_psnr))))
+    # print("PSNR: \n{}".format(val_psnr.round(3)))
+    psnr_ranking = np.flip(val_psnr.argsort(axis=0), axis=0)
+    # print("Index: \n{}".format(psnr_ranking))
+    for i in range(5):
+        print("Ranking {} PSNR: {:2.3f}, Epochs: {}".format(i + 1, val_psnr[psnr_ranking[i]], psnr_ranking[i]))
+    # print("Epochs: {}".format(epochs[val_psnr.index(max(val_psnr))]))
+    raise NotImplementedError
 
     # Save the psnr, avg_psnr, std_psnr out
     # Save the ssim, avg_ssim, std_ssim out
