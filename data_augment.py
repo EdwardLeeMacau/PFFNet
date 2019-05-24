@@ -207,8 +207,11 @@ if __name__ == "__main__":
             print("Clean {}".format(os.path.join(args.output, "hazy")))
             os.system("rm -r" + os.path.join(args.output, "hazy"))
             os.makedirs(os.path.join(args.output, "hazy"))
-        
-    # Function parallel working...
+    
+    # --------------------------------------------------------
+    # Generate the images
+    #     Using Function parallel working...
+    # --------------------------------------------------------
     splits = os.listdir(args.hazy)
 
     if args.step:
@@ -217,5 +220,3 @@ if __name__ == "__main__":
     elif args.random:
         # print("Executing: random_augments")
         Parallel(-1)(delayed(random_augments)(sp) for sp in splits)
-        # for sp in splits:
-        #     random_augments(sp)
