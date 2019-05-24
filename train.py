@@ -35,7 +35,7 @@ parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
 parser.add_argument("--rb", type=int, default=12, help="number of residual blocks")
 parser.add_argument("--batchSize", type=int, default=16, help="training batch size")
 parser.add_argument("--nEpochs", type=int, default=30, help="number of epochs to train for")
-parser.add_argument("--lr", type=float, default=1e-4, help="Learning Rate. Default=1e-4")
+parser.add_argument("--lr", type=float, default=1e-3, help="Learning Rate. Default=1e-4")
 parser.add_argument("--activation", default="LeakyReLU", help="the activation function use at training")
 parser.add_argument("--normalize", default=False, action="store_true", help="normalized the dataset images")
 parser.add_argument("--milestones", type=int, nargs='*', default=[10], help="Which epoch to decay the learning rate")
@@ -44,13 +44,13 @@ parser.add_argument("--start_epoch", default=1, type=int, help="Manual epoch num
 parser.add_argument("--momentum", default=0.9, type=float, help="SGD Momentum, Default: 0.9")
 parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
 parser.add_argument("--weight_decay", type=float, default=1e-5, help="The weight penalty in the training")
-parser.add_argument("--optimizer", type=str, default="Adam", help="Choose the optimizer")
+parser.add_argument("--optimizer", type=str, default="SGD", help="Choose the optimizer")
 # Message logging, model saving setting
 parser.add_argument("--tag", type=str, default="Indoor_512", help="tag for this training")
 parser.add_argument("--checkpoints", default="/media/disk1/EdwardLee/checkpoints", type=str, help="path to save the checkpoints")
-parser.add_argument("--val_interval", type=int, default=6250, help="step to test the model performance")
+parser.add_argument("--val_interval", type=int, default=1000, help="step to test the model performance")
 parser.add_argument("--log_interval", type=int, default=10, help="interval per iterations to log the message")
-parser.add_argument("--grad_interval", type=int, default=100, help="interval per iterations to draw the gradient")
+parser.add_argument("--grad_interval", type=int, default=1000, help="interval per iterations to draw the gradient")
 parser.add_argument("--save_interval", type=int, default=1000, help="interval per iterations to save the model")
 parser.add_argument("--detail", default="./train_details", help="the root directory to save the training details")
 # Device setting
@@ -161,7 +161,7 @@ def main():
     if opt.optimizer == "Adam":
         optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, weight_decay=opt.weight_decay)
     elif opt.optimizer == "SGD":
-        optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, weight_decay=opt.weigth_decay)
+        optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, weight_decay=opt.weight_decay)
     else:
         raise argparse.ArgumentError
     print("==========> Optimizer {}".format(opt.optimizer))
@@ -259,7 +259,7 @@ def train_eval(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, 
             torchvision.utils.save_image(output_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_output.png".format(epoch, iteration))
 
             # In epoch testing and saving (Newly added)
-            utils.save_checkpoint(model, opt.checkpoints, str(epoch).zfill(len(opt.nEpochs)), name, str(iteration).zfill(len(str(len(train_loader)))))
+            utils.save_checkpoint(model, opt.checkpoints, str(epoch).zfill(len(str(opt.nEpochs))), name, str(iteration).zfill(len(str(len(train_loader)))))
             
         if steps % opt.val_interval == 0:
             # mses, psnrs, ssims = test(val_loader, epoch, criterion)
