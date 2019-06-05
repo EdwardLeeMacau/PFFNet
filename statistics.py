@@ -12,14 +12,13 @@ from matplotlib import pyplot as plt
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--file", type=str)
-parser.add_argument("--ranking", type=int, default=5)
-parser.add_argument("--detail", type=str)
+parser.add_argument("--file", required=True, type=str, help="The path of the statistic file.")
+parser.add_argument("--ranking", type=int, default=5, help="The rank want to show")
+parser.add_argument("--iters", type=int, default=6250, help="The iterations of each epoch")
+parser.add_argument("--interval", type=int, default=1000, help="The interval between each time saving the model")
+# parser.add_argument("--detail", type=str)
 
 opt = parser.parse_args()
-
-with open(opt.detail, "r") as textfile:
-    print(textfile.read())
 
 with open(opt.file, "r") as textfile:
     lines = textfile.readlines()
@@ -42,19 +41,23 @@ with open(opt.file, "r") as textfile:
     psnr_ranking = np.flip(val_psnr.argsort(axis=0), axis=0)
     # print("Index: \n{}".format(psnr_ranking))
     for i in range(5):
-        print("Ranking {} PSNR: {:2.3f}, Epochs: {}".format(i + 1, val_psnr[psnr_ranking[i]], psnr_ranking[i]))
+        iterations = psnr_ranking[i] * opt.interval
+        epochs = iterations // opt.iters + 1
+        iters  = iterations % opt.iters
+        print("Ranking {} PSNR: {:2.3f}, Epochs: {}_{}".format(i + 1, val_psnr[psnr_ranking[i]], epochs, iters))
     # print("Epochs: {}".format(epochs[val_psnr.index(max(val_psnr))]))
-    raise NotImplementedError
 
-    # Save the psnr, avg_psnr, std_psnr out
-    # Save the ssim, avg_ssim, std_ssim out
+raise NotImplementedError
+
+with open(opt.file, "r") as file:
+    # Save the psnr, avg_psnr, std_psnr
+    #          ssim, avg_ssim, std_ssim out
     df = pd.DataFrame(np.transpose(test_psnr))
     df = df.append(pd.DataFrame([np.transpose(avg_psnr), np.transpose(std_psnr)]), ignore_index=True)
     df = df.append(pd.DataFrame(np.transpose(test_ssim)), ignore_index=True)
     df = df.append(pd.DataFrame([np.transpose(avg_ssim), np.transpose(std_ssim)]), ignore_index=True)
     # print(df.head)
     df.to_csv("stat_cal.csv")
-        
     
     # Plot the graphs, global setting
     train_val_loss = "loss.png"
