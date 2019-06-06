@@ -32,31 +32,32 @@ from model.rpnet import Net
 
 parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
 # Basic Training settings
-parser.add_argument("--rb", type=int, default=12, help="number of residual blocks")
-parser.add_argument("--batchSize", type=int, default=16, help="training batch size")
-parser.add_argument("--nEpochs", type=int, default=15, help="number of epochs to train for")
-parser.add_argument("--lr", type=float, default=1e-4, help="Learning Rate. Default=1e-4")
-parser.add_argument("--activation", default="LeakyReLU", help="the activation function use at training")
+parser.add_argument("--rb", default=18, type=int, help="number of residual blocks")
+parser.add_argument("--batch", default=16, type=int, help="training batch size")
+parser.add_argument("--epochs", default=15, type=int, help="number of epochs to train for")
+parser.add_argument("--lr", default=1e-4, type=float, help="Learning Rate. Default=1e-4")
+parser.add_argument("--activation", default="LeakyReLU", type=str, help="the activation function use at training")
 parser.add_argument("--normalize", default=False, action="store_true", help="normalized the dataset images")
-parser.add_argument("--milestones", type=int, nargs='*', default=[10], help="Which epoch to decay the learning rate")
-parser.add_argument("--gamma", type=float, default=0.1, help="The ratio of decaying learning rate everytime")
-parser.add_argument("--start_epoch", default=1, type=int, help="Manual epoch number (useful on restarts)")
+parser.add_argument("--milestones", default=[10], type=int, nargs='*', help="Which epoch to decay the learning rate")
+parser.add_argument("--gamma", default=0.1, type=float, help="The ratio of decaying learning rate everytime")
+parser.add_argument("--starts", default=1, type=int, help="Manual epoch number (useful on restarts)")
 parser.add_argument("--momentum", default=0.9, type=float, help="SGD Momentum, Default: 0.9")
 parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
-parser.add_argument("--weight_decay", type=float, default=1e-5, help="The weight penalty in the training")
-parser.add_argument("--optimizer", type=str, default="Adam", help="Choose the optimizer")
+parser.add_argument("--weight_decay", default=1e-5, type=float, help="The weight penalty in the training")
+parser.add_argument("--optimizer", default="Adam", type=str, help="Choose the optimizer")
+parser.add_argument("--loss_function", default=['L2'], type=str, nargs='*', help="loss function used in training, [l1, l2, preceptual] is allow")
 # Message logging, model saving setting
-parser.add_argument("--tag", type=str, default="Indoor_512_WeightDecay_1e-5", help="tag for this training")
+parser.add_argument("--tag", default="Indoor_512", type=str, help="tag for this training")
 parser.add_argument("--checkpoints", default="/media/disk1/EdwardLee/checkpoints", type=str, help="path to save the checkpoints")
-parser.add_argument("--val_interval", type=int, default=1000, help="step to test the model performance")
-parser.add_argument("--log_interval", type=int, default=10, help="interval per iterations to log the message")
-parser.add_argument("--grad_interval", type=int, default=1000, help="interval per iterations to draw the gradient")
-parser.add_argument("--save_interval", type=int, default=1000, help="interval per iterations to save the model")
-parser.add_argument("--detail", default="./train_details", help="the root directory to save the training details")
+parser.add_argument("--val_interval", default=1000, type=int,  help="step to test the model performance")
+parser.add_argument("--log_interval", default=10, type=int, help="interval per iterations to log the message")
+parser.add_argument("--grad_interval", default=0, type=int, help="interval per iterations to draw the gradient")
+parser.add_argument("--save_interval", default=1000, type=int, help="interval per iterations to save the model")
+parser.add_argument("--detail", default="./log", type=str, help="the root directory to save the training details")
 # Device setting
-parser.add_argument("--cuda", type=bool, default=True, help="Use cuda?")
-parser.add_argument("--gpus", type=int, default=1, help="nums of gpu to use")
-parser.add_argument("--threads", type=int, default=8, help="Number of threads for data loader to use, Default: 1")
+parser.add_argument("--cuda", default=True, type=bool, help="Use cuda?")
+parser.add_argument("--gpus", default=1, type=int, help="nums of gpu to use")
+parser.add_argument("--threads", default=8, type=int, help="Number of threads for data loader to use, Default: 1")
 parser.add_argument("--fixrandomseed", default=False, help="train with fix random seed")
 # Dataset loading, pretrain model setting
 parser.add_argument("--resume", type=str, help="Path to checkpoint (default: none)")
@@ -75,20 +76,33 @@ parser.add_argument("--val", default="/media/disk1/EdwardLee/IndoorVal_512", typ
 
 opt = parser.parse_args()
 
-# (Deprecated)
-# Set logger
-# logging.config.fileConfig("logging.ini")
-# statelogger = logging.getLogger(__name__)
-
 # Select Device
 device = utils.selectDevice()
 cudnn.benchmark = True
 
-def main():
-    global opt, name, model, criterion
+mean = torch.Tensor([0.485, 0.456, 0.406]).to(DEVICE)
+std  = torch.Tensor([0.229, 0.224, 0.225]).to(DEVICE)
 
+# ----------------------------------------------------------------------------
+# Normalization (mean shift)
+# ----------------------------------------------------------------------------
+# Normalization methods
+#   input = (input - mean[:, None, None]) / std[:, None, None]
+#
+# How to inverse:
+#   input = (input * std[:, None, None]) + mean[:, None, None]
+# 
+# Source code:
+#   tensor.sub_(mean[:, None, None]).div_(std[:, None, None])
+#
+# Pretrain network normalize parameterss
+#   mean = [0.485, 0.456, 0.406]
+#   std  = [0.229, 0.224, 0.225]
+# ----------------------------------------------------------------------------
+
+def main(opt):
     # Establish the folder and the summarywriter
-    name    = "{}_{}_{}_{}".format(opt.tag, date.today().strftime("%Y%m%d"), opt.rb, opt.batchSize)
+    name = "{}_{}_{}_{}".format(opt.tag, date.today().strftime("%Y%m%d"), opt.rb, opt.batchSize)
     
     if opt.cuda and not torch.cuda.is_available():
         raise Exception("No GPU found, please run without --cuda")
@@ -101,34 +115,35 @@ def main():
             torch.cuda.manual_seed(seed)
 
     print("==========> Loading datasets")
-    # -----------------------------------------------------------------
-    # Normalization methods
-    #   input[channel] = (input[channel] - mean[channel]) / std[channel]
-    #
-    # For pytorch pretrained ImageNet Feature Extractor
-    #   mean = [0.485, 0.456, 0.406]
-    #   std  = [0.229, 0.224, 0.225]
-    # -----------------------------------------------------------------
-    if opt.normalize:
-        img_transform = Compose([ToTensor(), Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    else:
-        img_transform = Compose([ToTensor()])
-    
+    transform = [ToTensor()]
+    if opt.normalize: transform.append(Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
+    img_transform = Compose(transform)
+
+
     train_dataset = DatasetFromFolder(opt.train, transform=img_transform)
     val_dataset   = DatasetFromFolder(opt.val, transform=img_transform)
-
-    train_loader = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchSize, pin_memory=True, shuffle=True)
-    val_loader   = DataLoader(dataset=val_dataset, num_workers=opt.threads, batch_size=opt.batchSize, pin_memory=True, shuffle=False)
+    train_loader  = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchSize, pin_memory=True, shuffle=True)
+    val_loader    = DataLoader(dataset=val_dataset, num_workers=opt.threads, batch_size=opt.batchSize, pin_memory=True, shuffle=True)
     
     print("==========> Building model")
+    # ----------------------------------------------------------------------------
+    # Notes: 20190515
+    #   The original model doesn't set any activation function in the output layer.
+    # -----------------------------------------------------------------------------
     model = Net(opt.rb)
+    
+    # --------------------------------------
+    # Loss
+    # -> opt.loss_function
+    # -> L1 Norm / L2 Norm / Perceptual loss 
+    # --------------------------------------
     criterion = nn.MSELoss(size_average=True)
     
-    # -------------------------
-    # Perceptual Loss
-    # -------------------------
     # vgg16 = ...
 
+    # -------------------------
+    # Load the network
+    # -------------------------
     # optionally resume from a checkpoint
     if opt.resume:
         if os.path.isfile(opt.resume):
@@ -148,6 +163,9 @@ def main():
         else:
             raise Exception("=> no pretrained model found at '{}'".format(opt.pretrained))
 
+    if opt.pretrained and opt.resume:
+        raise argparse.ArgumentError
+
     if opt.cuda:
         print("==========> Setting GPU")
         model = nn.DataParallel(model, device_ids=[i for i in range(opt.gpus)]).cuda()
@@ -157,14 +175,24 @@ def main():
         model = model.cpu()
         criterion = criterion.cpu()
 
-    print("==========> Setting Optimizer")
+    print("==========> Setting Optimizer: {}".format(opt.optimizer))
     if opt.optimizer == "Adam":
         optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, weight_decay=opt.weight_decay)
     elif opt.optimizer == "SGD":
         optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, weight_decay=opt.weight_decay)
+    elif opt.optimizer == "ASGD":
+        optimizer = optim.ASGD(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, lambd=1e-4, alpha=0.75, t0=1000000.0, weight_decay=opt.weight_decay)
+    elif opt.optimizer == "Adadelta":
+        optimizer = optim.Adadelta(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, rho=0.9, eps=1e-06, weight_decay=opt.weight_decay)
+    elif opt.optimizer == "Adagrad":
+        optimizer = optim.Adagrad(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, lr_decay=0, weight_decay=opt.weight_decay, initial_accumulator_value=0)
+    elif opt.optimizer == "SparseAdam":
+        optimizer = optim.SparseAdam(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, betas=(opt.b1, opt.b2), eps=1e-08)
+    elif opt.optimizer == "Adamax":
+        optimizer = optim.Adamax(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, betas=(opt.b1, opt.b2), eps=1e-08, weight_decay=opt.weight_dacay)
     else:
         raise argparse.ArgumentError
-    print("==========> Optimizer {}".format(opt.optimizer))
+
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=opt.milestones, gamma=opt.gamma)
 
     # Extablish container
@@ -181,17 +209,14 @@ def main():
     for epoch in range(opt.start_epoch, opt.nEpochs + 1):
         scheduler.step()
 
-        loss_iter, mse_iter, psnr_iter, ssim_iter, iterations = train_eval(
-            train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iterations)
-        
-        # (Deprecated)
-        # utils.save_checkpoint(model, opt.checkpoints, epoch, name)
-        # mses, psnrs, ssims = test(val_loader, epoch, criterion)
+        loss_iter, mse_iter, psnr_iter, ssim_iter, iterations = train_validate(
+            model, optimizer, criterion, train_loader, val_loader, epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iterations, name)
 
     return
 
-def train_eval(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iters):
-    print("learning_rate", optimizer.param_groups[0]["lr"], epoch)
+def train_validate(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module, train_loader: DataLoader, val_loader: DataLoader, 
+                   scheduler: optim.lr_scheduler.MultiStepLR, epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iters, savepath):
+    print("===> lr: ", optimizer.param_groups[0]["lr"])
     
     trainLoss = []
 
@@ -200,7 +225,6 @@ def train_eval(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, 
         # Train the network
         # ------------------
         model.train()
-        model.zero_grad()
         optimizer.zero_grad()
 
         steps = len(train_loader) * (epoch - 1) + iteration
@@ -215,81 +239,68 @@ def train_eval(train_loader, val_loader, optimizer, epoch, loss_iter, mse_iter, 
         optimizer.step()
 
         # ------------------------------------------------------------------------------
-        # Log the training message, gradient of each layer, testing, saving the network
+        # 1. Log the training message
+        # 2. Plot the gradient of each layer
+        # 3. Validate the model
+        # 4. Saving the network
         # ------------------------------------------------------------------------------
+        # 1. Log the training message
         if steps % opt.log_interval == 0:
             print("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(train_loader), loss.item()))
-            
-        if steps % opt.grad_interval == 0:
-            layer_names, mean, abs_mean, std = [], [], [], []
+        
+        # 2. Plot the gradient of each layer
+        if opt.grad_interval:
+            # (Deprecated)
+            if steps % opt.grad_interval == 0:
+                layer_names, mean, abs_mean, std = [], [], [], []
 
-            for layer_name, param in model.named_parameters():
-                layer_names.append('.'.join(layer_name.split('.')[1:]))
+                for layer_name, param in model.named_parameters():
+                    layer_names.append('.'.join(layer_name.split('.')[1:]))
+                    
+                    values = param.grad.detach().view(-1).cpu().numpy()
+                    mean.append(np.mean(values))
+                    abs_mean.append(np.mean(np.absolute(values)))
+                    std.append(np.std(values))
                 
-                values = param.grad.detach().view(-1).cpu().numpy()
-                mean.append(np.mean(values))
-                abs_mean.append(np.mean(np.absolute(values)))
-                std.append(np.std(values))
-            
-            # pprint.PrettyPrinter().pprint(layer_names)
-            plt.clf()
-            plt.figure(figsize=(19.2, 10.8))
-            plt.subplot(3, 1, 1)
-            plt.bar(np.arange(len(std)), np.asarray(std), 0.5)
-            plt.title("STD vs layer")
-            plt.subplot(3, 1, 2)
-            plt.bar(np.arange(len(mean)), np.asarray(mean), 0.5)
-            plt.title("Mean vs layer")
-            plt.subplot(3, 1, 3)
-            plt.bar(np.arange(len(abs_mean)), np.asarray(abs_mean), 0.5)
-            plt.title("Mean(Abs()) vs layer")
-            # plt.savefig("./{}/{}/grad_std_{}.png".format(opt.detail, name, str(steps).zfill(len(str(opt.nEpochs * len(train_loader))))))
-            # plt.table(rowLabels=["Mean", "STD"], 
-            #         colLabels=layer_names,
-            #         cellText=np.asarray([mean, std], dtype=np.float32))
-            plt.savefig("./{}/{}/grad_{}.png".format(opt.detail, name, str(steps).zfill(len(str(opt.nEpochs * len(train_loader))))))
-
+                plt.clf()
+                plt.figure(figsize=(19.2, 10.8))
+                plt.subplot(3, 1, 1)
+                plt.bar(np.arange(len(std)), np.asarray(std), 0.5)
+                plt.title("STD vs layer")
+                plt.subplot(3, 1, 2)
+                plt.bar(np.arange(len(mean)), np.asarray(mean), 0.5)
+                plt.title("Mean vs layer")
+                plt.subplot(3, 1, 3)
+                plt.bar(np.arange(len(abs_mean)), np.asarray(abs_mean), 0.5)
+                plt.title("Mean(Abs()) vs layer")
+                # plt.savefig("./{}/{}/grad_std_{}.png".format(opt.detail, name, str(steps).zfill(len(str(opt.nEpochs * len(train_loader))))))
+                # plt.table(rowLabels=["Mean", "STD"], 
+                #         colLabels=layer_names,
+                #         cellText=np.asarray([mean, std], dtype=np.float32))
+                plt.savefig("./{}/{}/grad_{}.png".format(opt.detail, name, str(steps).zfill(len(str(opt.nEpochs * len(train_loader))))))
+        
+        # 3. Validate the model
         if steps % opt.save_interval == 0:
-            data_temp   = make_grid(data.data, nrow=8)
-            label_temp  = make_grid(label.data, nrow=8)
-            output_temp = make_grid(output.data, nrow=8)
-
-            torchvision.utils.save_image(data_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_data.png".format(epoch, iteration))
-            torchvision.utils.save_image(label_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_label.png".format(epoch, iteration))
-            torchvision.utils.save_image(output_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_output.png".format(epoch, iteration))
-
-            # In epoch testing and saving (Newly added)
-            utils.save_checkpoint(model, opt.checkpoints, str(epoch).zfill(len(str(opt.nEpochs))), name, str(iteration).zfill(len(str(len(train_loader)))))
-            
+            # In epoch testing and saving
+            utils.saveCheckpoint(opt.checkpoints, model, optimizer, scheduler, epoch, iteration)
+        
+        # 4. Saving the network
         if steps % opt.val_interval == 0:
             # mses, psnrs, ssims = test(val_loader, epoch, criterion)
-            mse, psnr = test(val_loader, epoch, criterion)
+            mse, psnr = validate(model, val_loader, criterion, epoch, iteration, normalize=opt.normalize)
             loss_iter = np.append(loss_iter, np.array([np.mean(trainLoss)]), axis=0)
             mse_iter  = np.append(mse_iter, np.array([mse]), axis=0)
             psnr_iter = np.append(psnr_iter, np.array([psnr]), axis=0)
-            # ssim_iter = np.append(ssim_iter, np.array([ssim]), axis=0)
             iters     = np.append(iters, np.array([steps / len(train_loader)]), axis=0)
 
             trainLoss = []  # Clean the list 
-
-            # (Deprecated)
-            # mse_mean  = np.average(mse_iter, axis=1)
-            # psnr_mean = np.average(psnr_iter, axis=1)
-            # ssim_mean = np.average(ssim_iter, axis=1)
             
             with open(os.path.join(opt.detail, name, "statistics.txt"), "w") as textfile:
                 datas = [str(data.tolist()) for data in (loss_iter, mse_iter, psnr_iter, ssim_iter, iters)]
                 textfile.write("\n".join(datas))
                 
-            # ----------------------------------------------------------
-            # Plot TrainLoss, TestLoss and the minimum value of TestLoss
-            # ----------------------------------------------------------
-            draw_graphs(loss_iter, mse_iter, psnr_iter, ssim_iter, iters, len(train_loader))
-            
-            # (Deprecated)
-            # writer.add_scalar('Train/Loss', trainLoss, steps / len(train_loader))
-            # writer.add_scalar('Val/Loss', mse, steps / len(train_loader))
-            # writer.add_scalar('Val/PSNR', psnr, steps / len(train_loader))
+            # Plot TrainLoss, valloss
+            draw_graphs(loss_iter, mse_iter, psnr_iter, ssim_iter, iters, len(train_loader), os.path.join(opt.detail, name))
 
     return loss_iter, mse_iter, psnr_iter, ssim_iter, iters
 
@@ -321,12 +332,9 @@ def details(opt, path):
             print(msg)
             textfile.write(msg + '\n')
     
-    # print(model)
-    # torchsummary.summary(model, (3, 512, 512), batch_size=16, device='cuda')
-    
     return
 
-def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch, 
+def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch, savepath,
             loss_filename="loss.png", loss_log_filename="loss_log.png", psnr_filename="psnr.png"):
     # Linear scale of loss curve
     plt.clf()
@@ -337,7 +345,7 @@ def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch,
     plt.legend(loc=0)
     plt.xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
     plt.title("Loss vs Epochs")
-    plt.savefig(os.path.join(opt.detail, name, loss_filename))
+    plt.savefig(os.path.join(savepath, loss_filename))
 
     # Log scale of loss curve
     plt.clf()
@@ -349,7 +357,7 @@ def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch,
     plt.xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
     plt.yscale('log')
     plt.title("Loss vs Epochs")
-    plt.savefig(os.path.join(opt.detail, name, loss_log_filename))
+    plt.savefig(os.path.join(savepath, loss_log_filename))
 
     # Linear scale of PSNR, SSIM
     plt.clf()
@@ -359,57 +367,33 @@ def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch,
     plt.plot(x, np.repeat(np.amax(psnr), len(x)), ':')
     plt.xlabel("Epochs(s) / Iteration: {}".format(iters_per_epoch))
     plt.title("PSNR vs Epochs")
-
-    # fig, axis1 = plt.subplots(sharex=True, figsize=(12.8, 7.2))
-    # axis1.set_xlabel('Epoch(s) / Iteration: {}'.format(iters_per_epoch))
-    # axis1.set_ylabel('Average PSNR')
-    # axis1.plot(x, psnr, label="PSNR", color='b')
-    # axis1.plot(x, np.repeat(np.amax(psnr), len(x)), ':')
-    # axis1.tick_params()
-    # axis2 = axis1.twinx()
-    # axis2.plot(x, ssim, label="SSIM", color='r')
-    # axis2.set_ylabel('Average SSIM')
-    # axis2.tick_params()
         
     plt.legend(loc=0)
-    # plt.title("PSNR-SSIM vs Epochs")
-    plt.savefig(os.path.join(opt.detail, name, psnr_filename))
+    plt.savefig(os.path.join(savepath, psnr_filename))
 
     return
 
-def test(loader, epoch, criterion):
+def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, iteration, normalize=False):
     """
       Params:
+      - model
       - loader
+      - epoch
+      - criterion
+      - normalize
 
       Return:
       - np.mean(mse)
       - np.mean(psnr)
     """
-    psnrs = []
-    ssims = []
-    mses = []
+    psnrs, mses = [], []
     model.eval()
 
     with torch.no_grad():
         for (data, label) in tqdm(loader):
-            batchsize = data.shape[0]
-
             data, label = data.to(device), label.to(device)
 
-            # -----------------------------------------------------------------
-            # Normalization methods
-            #   input[channel] = (input[channel] - mean[channel]) / std[channel]
-            #
-            #   mean = [0.485, 0.456, 0.406]
-            #   std  = [0.229, 0.224, 0.225]
-            # 
-            # Notes: 20190515
-            #   The original model doesn't set any activation function in the output layer.
-            # -----------------------------------------------------------------
             output = model(data)
-            output = torch.clamp(output, 0., 1.)
-            
             mse = criterion(output, label).item()
             mses.append(mse)
             
@@ -420,22 +404,27 @@ def test(loader, epoch, criterion):
             psnr = 10 * np.log10(1.0 / mse)
             psnrs.append(psnr)
 
-            # for i in range(batchsize):
-            #     psnr = compare_psnr(label[i], output[i])
-            #     ssim = compare_ssim(label[i], output[i], multichannel=True)
-            #     psnrs.append(psnr)
-            #     ssims.append(ssim)
-        
-        psnr_mean = np.mean(psnrs)
-        mse_mean  = np.mean(mses)
-        # ssim_mean = np.mean(ssims)
 
-        print("[Vaild] epoch: {}, mse: {}".format(epoch, mse_mean))
-        print("[Vaild] epoch: {}, psnr: {}".format(epoch, psnr_mean))
-        # print("[Vaild] epoch: {}, ssim: {}".format(epoch, ssim_mean))
+        # Revert to domain [0, 1]
+        if normalize:
+            data   = data * std[:, None, None] + mean[:, None, None]
+            label  = label * std[:, None, None] + mean[:, None, None]
+            output = output * std[:, None, None] + mean[:, None, None]
 
-    return np.mean(mses), np.mean(psnrs) #, np.mean(ssims)
+        # Random sample 8 images from dataloader, draw the output
+        data_temp   = make_grid(data.data, nrow=8)
+        label_temp  = make_grid(label.data, nrow=8)
+        output_temp = make_grid(output.data, nrow=8)
+
+        torchvision.utils.save_image(data_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_data.png".format(epoch, iteration))
+        torchvision.utils.save_image(label_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_label.png".format(epoch, iteration))
+        torchvision.utils.save_image(output_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_output.png".format(epoch, iteration))
+
+        print("[Vaild] epoch: {}, mse:  {}".format(epoch, np.mean(mse)))
+        print("[Vaild] epoch: {}, psnr: {}".format(epoch, np.mean(psnr)))
+
+    return np.mean(mses), np.mean(psnrs)
 
 if __name__ == "__main__":
     os.system('clear')    
-    main()
+    main(opt)

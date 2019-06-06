@@ -37,33 +37,14 @@ class DatasetFromFolder(data.Dataset):
         self.transform = transform
 
     def __getitem__(self, index):
-        data = Image.open(self.data_filenames[index])
+        data  = Image.open(self.data_filenames[index])
         label = Image.open(self.label_filenames[index])
 
         if self.transform:
-            data = self.transform(data)
+            data  = self.transform(data)
             label = self.transform(label)
 
         return data, label
 
     def __len__(self):
         return len(self.data_filenames)
-
-def dataloader_unittest():
-    training_dataset = DatasetFromFolder(args.train, transform=torchvision.transforms.ToTensor())
-    testing_dataset  = DatasetFromFolder(args.test, transform=torchvision.transforms.ToTensor())
-
-    training_loader = DataLoader(dataset=training_dataset, num_workers=args.threads, batch_size=args.batchSize, pin_memory=True, shuffle=True)
-    testing_loader  = DataLoader(dataset=testing_dataset, num_workers=args.threads, batch_size=1, pin_memory=True, shuffle=False)
-
-    # Test loading speed
-    train_iter = iter(training_loader)
-    start = time.time()
-    for i in range(0, args.batchSize):
-        data, label = next(train_iter)
-
-    print("Using time: {}".format(time.time() - start))
-
-if __name__ == "__main__":
-    dataloader_unittest()
-    

@@ -5,9 +5,10 @@ from os.path import join
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torchvision.transforms as transforms
 from PIL import Image
+from torch import nn, optim
+
 
 def selectDevice():
     use_cuda = torch.cuda.is_available()
@@ -15,22 +16,15 @@ def selectDevice():
 
     return device
 
-def combine_photo(arr, output, color="RGB"):
-    """ Accept 2 images in the array, combine them with the horizontal direction """
-    img1 = Image.open(arr[0])
-    img2 = Image.open(arr[1])
-
-    size = img1.size
-
-    if color == "RGB":
-        toImage = Image.new(color, (size[0] * 2, size[1]))
-
-    toImage.paste(img1, (0, 0))
-    toImage.paste(img2, (size[0], 0))
-    toImage.save(output)
-
 def weights_init_kaiming(m):
-    """ Weights initial methods """
+    """ 
+      Kaiming weights initial methods
+
+      Params:
+      - m: the models
+
+      Return: None 
+    """
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
         nn.init.kaiming_normal(m.weight.data, a=0, mode='fan_in')
@@ -57,28 +51,28 @@ def is_image_file(filename):
 def load_all_image(path):
     return [join(path, x) for x in listdir(path) if is_image_file(x)]
 
-
-def save_checkpoint(model, root, epoch, model_folder, iteration=0):
-    """ Only save the model and the epoch, but not the optimizer. """
-    if iteration != 0:
-        model_out_path = os.path.join(root, model_folder, "{}_{}.pth".format(epoch, iteration))
-    else:
-        model_out_path = os.path.join(root, model_folder, "{}.pth".format(epoch))
-
-    state_dict = model.module.state_dict()
-    for key in state_dict.keys():
-        state_dict[key] = state_dict[key].cpu()
-
-    if not os.path.exists("checkpoints"):
-        os.makedirs("checkpoints")
-
-    if not os.path.exists(os.path.join(root, model_folder)):
-        os.makedirs(os.path.join(root, model_folder))
-
-    torch.save({
-        'epoch': epoch,
-        'state_dict': state_dict}, model_out_path)
-    print("Checkpoint saved to {}".format(model_out_path))
+# (Deprecated)
+# def save_checkpoint(model, root, epoch, model_folder, iteration=0):
+#     """ Only save the model and the epoch, but not the optimizer. """
+#     if iteration != 0:
+#         model_out_path = os.path.join(root, model_folder, "{}_{}.pth".format(epoch, iteration))
+#     else:
+#         model_out_path = os.path.join(root, model_folder, "{}.pth".format(epoch))
+# 
+#     state_dict = model.module.state_dict()
+#     for key in state_dict.keys():
+#         state_dict[key] = state_dict[key].cpu()
+# 
+#     if not os.path.exists("checkpoints"):
+#         os.makedirs("checkpoints")
+# 
+#     if not os.path.exists(os.path.join(root, model_folder)):
+#         os.makedirs(os.path.join(root, model_folder))
+# 
+#     torch.save({
+#         'epoch': epoch,
+#         'state_dict': state_dict}, model_out_path)
+#     print("Checkpoint saved to {}".format(model_out_path))
 
 
 class FeatureExtractor(nn.Module):
@@ -90,7 +84,17 @@ class FeatureExtractor(nn.Module):
         return self.features(x)
 
 
-def get_mean_and_std(dataset):
+def get_mean_and_std(dataset: torch.utils.data.Dataset):
+    """
+      Return the mean and std value of dataset
+
+      Params:
+      - dataset
+
+      Return:
+      - mean
+      - std
+    """
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=2)
     mean = torch.zeros(3)
     std = torch.zeros(3)
@@ -102,3 +106,116 @@ def get_mean_and_std(dataset):
     mean.div_(len(dataset))
     std.div_(len(dataset))
     return mean, std
+
+def saveCheckpoint(checkpoint_path, model: nn.Module, optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.MultiStepLR, epoch, iteration):
+    """
+      Params:
+      - checkpoint_path: the directory of the model parameter
+      - model: the neural network to save
+      - optimizer
+      - scheduler
+
+      Return: model, optimizer, resume_epoch, resume_iteration, scheduler
+    """
+    state = {
+        'state_dict': model.state_dict(),
+        'optimizer' : optimizer.state_dict(),
+        'epoch': epoch,
+        'iteration': iteration,
+        'scheduler': scheduler.state_dict()
+    }
+
+    torch.save(state, checkpoint_path)
+
+    return
+
+def loadCheckpoint(checkpoint_path: str, model: nn.Module, optimizer: optim, scheduler: optim.lr_scheduler.MultiStepLR):
+    """
+      Params:
+      - checkpoint_path: the directory of the model parameter
+      - model: the neural network to save
+      - optimizer
+      - scheduler
+
+      Return: model, optimizer, resume_epoch, resume_iteration, scheduler
+    """
+    state = torch.load(checkpoint_path)
+
+    resume_epoch = state['epoch']
+    model.load_state_dict(state['state_dict'])
+    optimizer.load_state_dict(state['optimizer'])
+    scheduler.load_state_dict(state['scheduler'])
+
+    return model, optimizer, resume_epoch, scheduler
+
+def saveModel(checkpoint_path: str, model: nn.Module):
+    """
+      Params:
+      - checkpoint_path: the directory of the model parameter
+      - feature: the structure of the feature extractor
+      - model: the neural network to save
+    """
+    state = {'state_dict': model.state_dict()}
+    torch.save(state, checkpoint_path)
+
+    return
+
+def loadModel(checkpoint_path: str, model: nn.Module, feature=None):
+    """
+      Params:
+      - checkpoint_path: the directory of the model parameter
+      - feature: the structure of the feature extractor
+      - model: the neural network to save
+    """
+    state = torch.load(checkpoint_path)
+    model.load_state_dict(state['state_dict'])
+
+    return model
+
+def checkpointToModel(checkpoint_path: str, model_path: str):
+    """
+      Params:
+      - checkpoint: 
+          Includes model, optimizer, schduler, save epochs and iterations.
+      - model: 
+          Includes model parameters only
+
+      Return: None
+    """
+    state = torch.load(checkpoint_path)
+    newState = {'state_dict': state['state_dict']}
+    torch.save(newState, model_path)
+
+    return
+
+def details(opt, path=None):
+    """
+      Show and marked down the training settings
+
+      Params:
+      - opt: The namespace of the train setting (Usually argparser)
+      - path: the path output textfile
+
+      Return: None
+    """
+    makedirs = []
+
+    if path:        
+        folder = os.path.dirname(path)
+        while not os.path.exists(folder):
+            makedirs.append(folder)
+            folder = os.path.dirname(folder)
+
+        while len(makedirs) > 0:
+            makedirs, folder = makedirs[:-1], makedirs[-1]
+            os.makedirs(folder)
+
+        with open(path, "w") as textfile:
+            for item, values in vars(opt).items():
+                msg = "{:16} {}".format(item, values)
+                textfile.write(msg + '\n')
+    
+    for item, values in vars(opt).items():
+        print("{:16} {}".format(item, values))
+            
+    return
