@@ -101,12 +101,8 @@ std  = torch.Tensor([0.229, 0.224, 0.225]).to(device)
 # ----------------------------------------------------------------------------
 
 def main(opt):
-    # Establish the folder and the summarywriter
     name = "{}_{}_{}_{}".format(opt.tag, date.today().strftime("%Y%m%d"), opt.rb, opt.batchsize)
     
-    if opt.cuda and not torch.cuda.is_available():
-        raise Exception("No GPU found, please run without --cuda")
-
     if opt.fixrandomseed:
         seed = 1334
         torch.manual_seed(seed)
@@ -141,37 +137,9 @@ def main(opt):
     
     # vgg16 = ...
 
-    # -------------------------
-    # Load the network
-    # -------------------------
-    if opt.resume and opt.pretrained:
-        raise argparse.ArgumentError
-
-    # optionally resume from a checkpoint
-    if opt.resume:
-        if os.path.isfile(opt.resume):
-            print("=> loading checkpoint '{}'".format(opt.resume))
-            model, optimizer, opt.starts, opt.iterations, schduler = utils.loadCheckpoint(opt.resume, model, optimizer, scheduler)
-        else:
-            raise Exception("=> no checkpoint found at '{}'".format(opt.resume))
-
-    # optionally copy weights from a checkpoint
-    if opt.pretrained:
-        if os.path.isfile(opt.pretrained):
-            print("=> loading pretrained model '{}'".format(opt.pretrained))
-            model = utils.loadCheckpoint(opt.pretrained, model)
-        else:
-            raise Exception("=> no pretrained model found at '{}'".format(opt.pretrained))
-
-    if opt.cuda:
-        print("==========> Setting GPU")
-        model = nn.DataParallel(model, device_ids=[i for i in range(opt.gpus)]).cuda()
-        criterion = criterion.cuda()
-    else:
-        print("==========> Setting CPU")
-        model = model.cpu()
-        criterion = criterion.cpu()
-
+    # --------------------------------------
+    # Optimizer and learning rate scheduler
+    # --------------------------------------
     print("==========> Setting Optimizer: {}".format(opt.optimizer))
     if opt.optimizer == "Adam":
         optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, weight_decay=opt.weight_decay)
@@ -192,6 +160,37 @@ def main(opt):
 
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=opt.milestones, gamma=opt.gamma)
 
+    # -------------------------
+    # Load the network
+    # -------------------------
+    if opt.resume and opt.pretrained:
+        raise argparse.ArgumentError
+
+    # optionally resume from a checkpoint
+    if opt.resume:
+        if os.path.isfile(opt.resume):
+            print("=> loading checkpoint '{}'".format(opt.resume))
+            model, optimizer, opt.starts, opt.iterations, scheduler = utils.loadCheckpoint(opt.resume, model, optimizer, scheduler)
+        else:
+            raise Exception("=> no checkpoint found at '{}'".format(opt.resume))
+
+    # optionally copy weights from a checkpoint
+    if opt.pretrained:
+        if os.path.isfile(opt.pretrained):
+            print("=> loading pretrained model '{}'".format(opt.pretrained))
+            model = utils.loadModel(opt.pretrained, model)
+        else:
+            raise Exception("=> no pretrained model found at '{}'".format(opt.pretrained))
+
+    if opt.cuda:
+        print("==========> Setting GPU")
+        model = nn.DataParallel(model, device_ids=[i for i in range(opt.gpus)]).cuda()
+        criterion = criterion.cuda()
+    else:
+        print("==========> Setting CPU")
+        model = model.cpu()
+        criterion = criterion.cpu()
+
     # Extablish container
     loss_iter  = np.empty(0, dtype=float)
     psnr_iter  = np.empty(0, dtype=float)
@@ -208,13 +207,13 @@ def main(opt):
 
         loss_iter, mse_iter, psnr_iter, ssim_iter, iterations = train_val(
             model, optimizer, criterion, train_loader, val_loader, scheduler, 
-            epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iterations, os.path.join(detail, name)
+            epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iterations, opt, name
         )
 
     return
 
 def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module, train_loader: DataLoader, val_loader: DataLoader, 
-                   scheduler: optim.lr_scheduler.MultiStepLR, epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iters, savepath):
+                   scheduler: optim.lr_scheduler.MultiStepLR, epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iters, opt, name):
     print("===> lr: ", optimizer.param_groups[0]["lr"])
     
     trainLoss = []
@@ -425,5 +424,9 @@ def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, 
     return np.mean(mses), np.mean(psnrs)
 
 if __name__ == "__main__":
-    os.system('clear')    
+    os.system('clear')
+
+    if opt.cuda and not torch.cuda.is_available():
+        raise Exception("No GPU found, please run without --cuda")
+    
     main(opt)

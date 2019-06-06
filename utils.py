@@ -142,11 +142,12 @@ def loadCheckpoint(checkpoint_path: str, model: nn.Module, optimizer: optim, sch
     state = torch.load(checkpoint_path)
 
     resume_epoch = state['epoch']
+    resume_iteration = state['iteration']
     model.load_state_dict(state['state_dict'])
     optimizer.load_state_dict(state['optimizer'])
     scheduler.load_state_dict(state['scheduler'])
 
-    return model, optimizer, resume_epoch, scheduler
+    return model, optimizer, resume_epoch, resume_iteration, scheduler
 
 def saveModel(checkpoint_path: str, model: nn.Module):
     """
@@ -160,7 +161,7 @@ def saveModel(checkpoint_path: str, model: nn.Module):
 
     return
 
-def loadModel(checkpoint_path: str, model: nn.Module, feature=None):
+def loadModel(checkpoint_path: str, model: nn.Module):
     """
       Params:
       - checkpoint_path: the directory of the model parameter
