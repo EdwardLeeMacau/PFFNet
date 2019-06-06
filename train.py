@@ -33,7 +33,7 @@ from model.rpnet import Net
 parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
 # Basic Training settings
 parser.add_argument("--rb", default=18, type=int, help="number of residual blocks")
-parser.add_argument("--batch", default=16, type=int, help="training batch size")
+parser.add_argument("--batchsize", default=16, type=int, help="training batch size")
 parser.add_argument("--epochs", default=15, type=int, help="number of epochs to train for")
 parser.add_argument("--lr", default=1e-4, type=float, help="Learning Rate. Default=1e-4")
 parser.add_argument("--activation", default="LeakyReLU", type=str, help="the activation function use at training")
@@ -80,8 +80,8 @@ opt = parser.parse_args()
 device = utils.selectDevice()
 cudnn.benchmark = True
 
-mean = torch.Tensor([0.485, 0.456, 0.406]).to(DEVICE)
-std  = torch.Tensor([0.229, 0.224, 0.225]).to(DEVICE)
+mean = torch.Tensor([0.485, 0.456, 0.406]).to(device)
+std  = torch.Tensor([0.229, 0.224, 0.225]).to(device)
 
 # ----------------------------------------------------------------------------
 # Normalization (mean shift)
@@ -102,7 +102,7 @@ std  = torch.Tensor([0.229, 0.224, 0.225]).to(DEVICE)
 
 def main(opt):
     # Establish the folder and the summarywriter
-    name = "{}_{}_{}_{}".format(opt.tag, date.today().strftime("%Y%m%d"), opt.rb, opt.batchSize)
+    name = "{}_{}_{}_{}".format(opt.tag, date.today().strftime("%Y%m%d"), opt.rb, opt.batchsize)
     
     if opt.cuda and not torch.cuda.is_available():
         raise Exception("No GPU found, please run without --cuda")
@@ -122,8 +122,8 @@ def main(opt):
 
     train_dataset = DatasetFromFolder(opt.train, transform=img_transform)
     val_dataset   = DatasetFromFolder(opt.val, transform=img_transform)
-    train_loader  = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchSize, pin_memory=True, shuffle=True)
-    val_loader    = DataLoader(dataset=val_dataset, num_workers=opt.threads, batch_size=opt.batchSize, pin_memory=True, shuffle=True)
+    train_loader  = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchsize, pin_memory=True, shuffle=True)
+    val_loader    = DataLoader(dataset=val_dataset, num_workers=opt.threads, batch_size=opt.batchsize, pin_memory=True, shuffle=True)
     
     print("==========> Building model")
     # ----------------------------------------------------------------------------
@@ -144,27 +144,24 @@ def main(opt):
     # -------------------------
     # Load the network
     # -------------------------
+    if opt.resume and opt.pretrained:
+        raise argparse.ArgumentError
+
     # optionally resume from a checkpoint
     if opt.resume:
         if os.path.isfile(opt.resume):
             print("=> loading checkpoint '{}'".format(opt.resume))
-            checkpoint = torch.load(opt.resume)
-            opt.start_epoch = checkpoint["epoch"] + 1
-            model.load_state_dict(checkpoint["state_dict"])
+            model, optimizer, opt.starts, opt.iterations, schduler = utils.loadCheckpoint(opt.resume, model, optimizer, scheduler)
         else:
             raise Exception("=> no checkpoint found at '{}'".format(opt.resume))
 
     # optionally copy weights from a checkpoint
     if opt.pretrained:
         if os.path.isfile(opt.pretrained):
-            print("=> loading model '{}'".format(opt.pretrained))
-            weights = torch.load(opt.pretrained)
-            model.load_state_dict(weights['state_dict'].state_dict())
+            print("=> loading pretrained model '{}'".format(opt.pretrained))
+            model = utils.loadCheckpoint(opt.pretrained, model)
         else:
             raise Exception("=> no pretrained model found at '{}'".format(opt.pretrained))
-
-    if opt.pretrained and opt.resume:
-        raise argparse.ArgumentError
 
     if opt.cuda:
         print("==========> Setting GPU")
@@ -206,15 +203,17 @@ def main(opt):
     details(opt, "./{}/{}/{}".format(opt.detail, name, "args.txt"))
 
     print("==========> Training")
-    for epoch in range(opt.start_epoch, opt.nEpochs + 1):
+    for epoch in range(opt.starts, opt.epochs + 1):
         scheduler.step()
 
-        loss_iter, mse_iter, psnr_iter, ssim_iter, iterations = train_validate(
-            model, optimizer, criterion, train_loader, val_loader, epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iterations, name)
+        loss_iter, mse_iter, psnr_iter, ssim_iter, iterations = train_val(
+            model, optimizer, criterion, train_loader, val_loader, scheduler, 
+            epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iterations, os.path.join(detail, name)
+        )
 
     return
 
-def train_validate(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module, train_loader: DataLoader, val_loader: DataLoader, 
+def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module, train_loader: DataLoader, val_loader: DataLoader, 
                    scheduler: optim.lr_scheduler.MultiStepLR, epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iters, savepath):
     print("===> lr: ", optimizer.param_groups[0]["lr"])
     
