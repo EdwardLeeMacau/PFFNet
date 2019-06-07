@@ -43,11 +43,11 @@ parser.add_argument("--gamma", default=0.1, type=float, help="The ratio of decay
 parser.add_argument("--starts", default=1, type=int, help="Manual epoch number (useful on restarts)")
 parser.add_argument("--momentum", default=0.9, type=float, help="SGD Momentum, Default: 0.9")
 parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
-parser.add_argument("--weight_decay", default=1e-5, type=float, help="The weight penalty in the training")
+parser.add_argument("--weight_decay", default=0, type=float, help="The weight penalty in the training")
 parser.add_argument("--optimizer", default="Adam", type=str, help="Choose the optimizer")
 parser.add_argument("--loss_function", default=['L2'], type=str, nargs='*', help="loss function used in training, [l1, l2, preceptual] is allow")
 # Message logging, model saving setting
-parser.add_argument("--tag", default="Indoor_512", type=str, help="tag for this training")
+parser.add_argument("--tag", default="Indoor_512_Normalize", type=str, help="tag for this training")
 parser.add_argument("--checkpoints", default="/media/disk1/EdwardLee/checkpoints", type=str, help="path to save the checkpoints")
 parser.add_argument("--val_interval", default=1000, type=int,  help="step to test the model performance")
 parser.add_argument("--log_interval", default=10, type=int, help="interval per iterations to log the message")
@@ -280,7 +280,8 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
         # 3. Validate the model
         if steps % opt.save_interval == 0:
             # In epoch testing and saving
-            utils.saveCheckpoint(opt.checkpoints, model, optimizer, scheduler, epoch, iteration)
+            checkpoint_path = os.path.join(opt.checkpoints, name, "{}_{}.pth".format(epoch, iteration))
+            utils.saveCheckpoint(checkpoint_path, model, optimizer, scheduler, epoch, iteration)
         
         # 4. Saving the network
         if steps % opt.val_interval == 0:
@@ -410,13 +411,13 @@ def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, 
             output = output * std[:, None, None] + mean[:, None, None]
 
         # Random sample 8 images from dataloader, draw the output
-        data_temp   = make_grid(data.data, nrow=8)
-        label_temp  = make_grid(label.data, nrow=8)
-        output_temp = make_grid(output.data, nrow=8)
+        # data_temp   = make_grid(data.data, nrow=8)
+        # label_temp  = make_grid(label.data, nrow=8)
+        # output_temp = make_grid(output.data, nrow=8)
 
-        torchvision.utils.save_image(data_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_data.png".format(epoch, iteration))
-        torchvision.utils.save_image(label_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_label.png".format(epoch, iteration))
-        torchvision.utils.save_image(output_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_output.png".format(epoch, iteration))
+        # torchvision.utils.save_image(data_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_data.png".format(epoch, iteration))
+        # torchvision.utils.save_image(label_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_label.png".format(epoch, iteration))
+        # torchvision.utils.save_image(output_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_output.png".format(epoch, iteration))
 
         print("[Vaild] epoch: {}, mse:  {}".format(epoch, np.mean(mse)))
         print("[Vaild] epoch: {}, psnr: {}".format(epoch, np.mean(psnr)))
