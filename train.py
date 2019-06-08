@@ -37,7 +37,7 @@ parser.add_argument("--batchsize", default=16, type=int, help="training batch si
 parser.add_argument("--epochs", default=15, type=int, help="number of epochs to train for")
 parser.add_argument("--lr", default=1e-4, type=float, help="Learning Rate. Default=1e-4")
 parser.add_argument("--activation", default="LeakyReLU", type=str, help="the activation function use at training")
-parser.add_argument("--normalize", default=False, action="store_true", help="normalized the dataset images")
+parser.add_argument("--normalize", default=True, action="store_true", help="normalized the dataset images")
 parser.add_argument("--milestones", default=[10], type=int, nargs='*', help="Which epoch to decay the learning rate")
 parser.add_argument("--gamma", default=0.1, type=float, help="The ratio of decaying learning rate everytime")
 parser.add_argument("--starts", default=1, type=int, help="Manual epoch number (useful on restarts)")
@@ -102,7 +102,10 @@ std  = torch.Tensor([0.229, 0.224, 0.225]).to(device)
 
 def main(opt):
     name = "{}_{}_{}_{}".format(opt.tag, date.today().strftime("%Y%m%d"), opt.rb, opt.batchsize)
-    
+
+    # Make the checkpoint restore path.
+    os.makedirs(os.path.join(opt.checkpoints, name), exist_ok=True)
+
     if opt.fixrandomseed:
         seed = 1334
         torch.manual_seed(seed)
@@ -111,9 +114,15 @@ def main(opt):
             torch.cuda.manual_seed(seed)
 
     print("==========> Loading datasets")
-    transform = [ToTensor()]
-    if opt.normalize: transform.append(Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
-    img_transform = Compose(transform)
+    if opt.normalize:
+        img_transform = Compose([
+            ToTensor(),
+            Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+        print("==========> Using Normalization")
+    else:
+        img_transform = ToTensor()
+
 
 
     train_dataset = DatasetFromFolder(opt.train, transform=img_transform)
@@ -372,6 +381,31 @@ def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch, savepath,
 
     return
 
+def grid_show(model: nn.Module, loader: DataLoader, folder, nrow=8, normalize=False):
+    """
+      Params:
+      - model:
+      - loader:
+      - folder:
+      - nrow:
+      - normalize:
+
+      Return: None
+    """
+    iterator    = iter(loader)
+    data, label = next(iterator)
+    output      = model(data)
+
+    if normalize:
+        data   = data * std[:, None, None] + mean[:, None, None]
+        label  = label * std[:, None, None] + mean[:, None, None]
+        output = output * std[:, None, None] + mean[:, None, None]
+
+    images = torch.cat((data, output, label), axis=0)
+    images = make_grid(images.data, nrow=nrow)
+
+    torchvision.utils.save_image(images, "{}/{}_{}.png".format(epoch, iteration))
+
 def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, iteration, normalize=False):
     """
       Params:
@@ -388,6 +422,9 @@ def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, 
     psnrs, mses = [], []
     model.eval()
 
+    if normalize:
+        print("==========> Using Normalization to measure MSE.")
+
     with torch.no_grad():
         for (data, label) in tqdm(loader):
             data, label = data.to(device), label.to(device)
@@ -395,30 +432,22 @@ def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, 
             output = model(data)
             mse = criterion(output, label).item()
             mses.append(mse)
-            
-            # (batchsize, width, height, channel)
-            output = output.permute(0, 2, 3, 1).cpu().numpy()
-            label  = label.permute(0, 2, 3, 1).cpu().numpy()
 
+            if normalize:
+                data   = data * std[:, None, None] + mean[:, None, None]
+                label  = label * std[:, None, None] + mean[:, None, None]
+                output = output * std[:, None, None] + mean[:, None, None]
+
+            # Dimension: (batchsize, width, height, channel)
+            # output = output.permute(0, 2, 3, 1).cpu().numpy()
+            # label  = label.permute(0, 2, 3, 1).cpu().numpy()
+
+            mse  = criterion(output, label).item()
             psnr = 10 * np.log10(1.0 / mse)
             psnrs.append(psnr)
 
-
-        # Revert to domain [0, 1]
-        if normalize:
-            data   = data * std[:, None, None] + mean[:, None, None]
-            label  = label * std[:, None, None] + mean[:, None, None]
-            output = output * std[:, None, None] + mean[:, None, None]
-
-        # Random sample 8 images from dataloader, draw the output
-        # data_temp   = make_grid(data.data, nrow=8)
-        # label_temp  = make_grid(label.data, nrow=8)
-        # output_temp = make_grid(output.data, nrow=8)
-
-        # torchvision.utils.save_image(data_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_data.png".format(epoch, iteration))
-        # torchvision.utils.save_image(label_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_label.png".format(epoch, iteration))
-        # torchvision.utils.save_image(output_temp, "/media/disk1/EdwardLee/images/Image_{}_{}_output.png".format(epoch, iteration))
-
+        # TODO: Add grid_show
+        # grid_show(model, loader, os.path.join(opt.log, name))
         print("[Vaild] epoch: {}, mse:  {}".format(epoch, np.mean(mse)))
         print("[Vaild] epoch: {}, psnr: {}".format(epoch, np.mean(psnr)))
 

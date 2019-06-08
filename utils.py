@@ -117,6 +117,10 @@ def saveCheckpoint(checkpoint_path, model: nn.Module, optimizer: optim.Optimizer
 
       Return: model, optimizer, resume_epoch, resume_iteration, scheduler
     """
+    # state_dict = model.module.state_dict()
+    # for key in state_dict.keys():
+    #     state_dict[key] = state_dict[key].cpu()
+
     state = {
         'state_dict': model.state_dict(),
         'optimizer' : optimizer.state_dict(),
@@ -161,14 +165,20 @@ def saveModel(checkpoint_path: str, model: nn.Module):
 
     return
 
-def loadModel(checkpoint_path: str, model: nn.Module):
+def loadModel(checkpoint_path: str, model: nn.Module, dataparallel=False):
     """
       Params:
       - checkpoint_path: the directory of the model parameter
-      - feature: the structure of the feature extractor
       - model: the neural network to save
+      - dataparallel: If true, the key of the state_dict will have a 'module' prefix, remove it. 
     """
     state = torch.load(checkpoint_path)
+    
+    if dataparallel:
+        for key in list(state['state_dict'].keys()):
+            newkey = ".".join(key.split('.')[1:])
+            state['state_dict'].update({newkey: state['state_dict'].pop(key)})
+    
     model.load_state_dict(state['state_dict'])
 
     return model

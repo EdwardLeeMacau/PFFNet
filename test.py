@@ -14,7 +14,7 @@ from PIL import Image
 from tqdm import tqdm
 import torch.nn as nn
 from torch.autograd import Variable
-from torchvision.transforms import ToTensor, ToPILImage, Normalize, Resize
+from torchvision import transforms
 
 from model.rpnet import Net
 from psnr_ssim import val
@@ -25,15 +25,17 @@ from psnr_ssim import val
   2. In pyTorch-0.4.0, numpy is doesn't support problem.
 """
 
-device = utils.selectDevice()
+device = 'cpu'
+# device = utils.selectDevice()
+mean = torch.Tensor([0.485, 0.456, 0.406]).to(device)
+std  = torch.Tensor([0.229, 0.224, 0.225]).to(device)
 
 def predict(opt):
     if not os.path.exists(opt.checkpoint):
         raise FileNotFoundError("File doesn't exists: {}".format(opt.checkpoint))
 
     # rb: Residual Blocks
-    net = Net(opt.rb).to(device)
-    net.load_state_dict(torch.load(opt.checkpoint)['state_dict'])
+    net = utils.loadModel(opt.checkpoint, Net(opt.rb), dataparallel=True).to(device)
     net.eval()
         
     # Test photos: Default Reside
@@ -48,9 +50,18 @@ def predict(opt):
         makedirs.append(folder)
         folder = os.path.dirname(folder)
     
-    if len(makedirs) > 0:
+    while makedirs:
         makedirs, folder = makedirs[:-1], makedirs[-1]
         os.makedirs(folder, exist_ok=True)
+
+    # Transform
+    if opt.normalize:
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+    else:
+        transform = transforms.ToTensor()
 
     print("==========> DeHazing, Target: {}".format(len(images)))
     for im_path in tqdm(images):
@@ -60,16 +71,18 @@ def predict(opt):
         
         print("==========> Input filename: {}".format(filename))
         
-        im = ToTensor()(im)
-        im = im.view(1, -1, w, h).to(device)
-        # im = im.cuda()
+        im = transform(im).view(1, -1, w, h).to(device)
         
         with torch.no_grad():
             im_dehaze = net(im)
+
+            # Shift the value to [0, 1]
+            if opt.normalize:
+                im_dehaze = im_dehaze * std[:, None, None] + mean[:, None, None]
         
         # Take the Image out from GPU.
         im_dehaze = torch.clamp(im_dehaze, 0., 1.).cpu().data[0]
-        im_dehaze = ToPILImage()(im_dehaze)
+        im_dehaze = transforms.ToPILImage()(im_dehaze)
 
         im_dehaze.save(os.path.join(opt.dehazy, filename))
         print("==========> File saved: {}".format(os.path.join(opt.dehazy, filename)))
@@ -79,13 +92,13 @@ def main():
     parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
     parser.add_argument("--checkpoint", type=str, help="root of model checkpoint")
     parser.add_argument("--hazy", type=str, default="/media/disk1/EdwardLee/IndoorTest/hazy", help="path to load test images")
-    parser.add_argument("--cuda", default=True, help="Use cuda?")
+    parser.add_argument("--cuda", default=False, help="Use cuda?")
     parser.add_argument("--gpus", type=int, default=8, help="nums of gpu to use")
     parser.add_argument("--dehazy", type=str, default="/media/disk1/EdwardLee/Output", help="path to save output images")
     parser.add_argument("--record", type=str, default="./psnr_ssim.txt", help="wrote the result to the textfile")
     parser.add_argument("--gt", type=str, default="/media/disk1/EdwardLee/IndoorTest/gt", help="path to load gt images")
     parser.add_argument("--normalize", action="store_true", default=False, help="pre / post normalization of the images")
-    parser.add_argument("--detail", default="./train_details", help="path to read the training details")
+    parser.add_argument("--detail", default="./log", help="path to read the training details")
     parser.add_argument("--activation", default="LeakyReLU", help="the activation of the model")
     
     # subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze / SOTS")
