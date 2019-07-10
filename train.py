@@ -30,52 +30,6 @@ import utils
 from data import DatasetFromFolder
 from model.rpnet import Net
 
-parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
-# Basic Training settings
-parser.add_argument("--rb", default=18, type=int, help="number of residual blocks")
-parser.add_argument("--batchsize", default=16, type=int, help="training batch size")
-parser.add_argument("--epochs", default=15, type=int, help="number of epochs to train for")
-parser.add_argument("--lr", default=1e-4, type=float, help="Learning Rate. Default=1e-4")
-parser.add_argument("--activation", default="LeakyReLU", type=str, help="the activation function use at training")
-parser.add_argument("--normalize", default=True, action="store_true", help="normalized the dataset images")
-parser.add_argument("--milestones", default=[10], type=int, nargs='*', help="Which epoch to decay the learning rate")
-parser.add_argument("--gamma", default=0.1, type=float, help="The ratio of decaying learning rate everytime")
-parser.add_argument("--starts", default=1, type=int, help="Manual epoch number (useful on restarts)")
-parser.add_argument("--momentum", default=0.9, type=float, help="SGD Momentum, Default: 0.9")
-parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
-parser.add_argument("--weight_decay", default=0, type=float, help="The weight penalty in the training")
-parser.add_argument("--optimizer", default="Adam", type=str, help="Choose the optimizer")
-parser.add_argument("--loss_function", default=['L2'], type=str, nargs='*', help="loss function used in training, [l1, l2, preceptual] is allow")
-# Message logging, model saving setting
-parser.add_argument("--tag", default="Indoor_512_Normalize", type=str, help="tag for this training")
-parser.add_argument("--checkpoints", default="/media/disk1/EdwardLee/checkpoints", type=str, help="path to save the checkpoints")
-parser.add_argument("--val_interval", default=1000, type=int,  help="step to test the model performance")
-parser.add_argument("--log_interval", default=10, type=int, help="interval per iterations to log the message")
-parser.add_argument("--grad_interval", default=0, type=int, help="interval per iterations to draw the gradient")
-parser.add_argument("--save_interval", default=1000, type=int, help="interval per iterations to save the model")
-parser.add_argument("--detail", default="./log", type=str, help="the root directory to save the training details")
-# Device setting
-parser.add_argument("--cuda", default=True, type=bool, help="Use cuda?")
-parser.add_argument("--gpus", default=1, type=int, help="nums of gpu to use")
-parser.add_argument("--threads", default=8, type=int, help="Number of threads for data loader to use, Default: 1")
-parser.add_argument("--fixrandomseed", default=False, help="train with fix random seed")
-# Dataset loading, pretrain model setting
-parser.add_argument("--resume", type=str, help="Path to checkpoint (default: none)")
-parser.add_argument("--train", default="/media/disk1/EdwardLee/IndoorTrain_512", type=str, help="path to load train datasets")
-parser.add_argument("--val", default="/media/disk1/EdwardLee/IndoorVal_512", type=str, help="path to load val datasets")
-
-# subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze")
-
-# ihazeparser = subparser.add_parser("I-Haze")
-# ihazeparser.add_argument("--train", default="/media/disk1/EdwardLee/IndoorTrain", type=str, help="path to load train datasets")
-# ihazeparser.add_argument("--test", default="/media/disk1/EdwardLee/IndoorTest", type=str, help="path to load test datasets")
-
-# ohazeparser = subparser.add_parser("O-Haze")
-# ohazeparser.add_argument("--train", default="/media/disk1/EdwardLee/OutdoorTrain", type=str, help="path to load train datasets")
-# ohazeparser.add_argument("--test", default="/media/disk1/EdwardLee/OutdoorTest", type=str, help="path to load test datasets")
-
-opt = parser.parse_args()
-
 # Select Device
 device = utils.selectDevice()
 cudnn.benchmark = True
@@ -101,11 +55,6 @@ std  = torch.Tensor([0.229, 0.224, 0.225]).to(device)
 # ----------------------------------------------------------------------------
 
 def main(opt):
-    name = "{}_{}_{}_{}".format(opt.tag, date.today().strftime("%Y%m%d"), opt.rb, opt.batchsize)
-
-    # Make the checkpoint restore path.
-    os.makedirs(os.path.join(opt.checkpoints, name), exist_ok=True)
-
     if opt.fixrandomseed:
         seed = 1334
         torch.manual_seed(seed)
@@ -131,24 +80,22 @@ def main(opt):
     val_loader    = DataLoader(dataset=val_dataset, num_workers=opt.threads, batch_size=opt.batchsize, pin_memory=True, shuffle=True)
     
     print("==========> Building model")
-    # ----------------------------------------------------------------------------
-    # Notes: 20190515
-    #   The original model doesn't set any activation function in the output layer.
-    # -----------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------ #
+    # Notes: 20190515                                                                #
+    #   The original model doesn't set any activation function in the output layer.  #
+    # ------------------------------------------------------------------------------ #
     model = Net(opt.rb)
     
-    # --------------------------------------
-    # Loss
-    # -> opt.loss_function
-    # -> L1 Norm / L2 Norm / Perceptual loss 
-    # --------------------------------------
+    # ------------------------------------------------------------------------------ #
+    # Loss: L1 Norm / L2 Norm / Perceptual loss                                      #
+    # ------------------------------------------------------------------------------ #
     criterion = nn.MSELoss(size_average=True)
     
     # vgg16 = ...
 
-    # --------------------------------------
-    # Optimizer and learning rate scheduler
-    # --------------------------------------
+    # ------------------------------------------------------------------------------ #
+    # Optimizer and learning rate scheduler                                          #
+    # ------------------------------------------------------------------------------ #
     print("==========> Setting Optimizer: {}".format(opt.optimizer))
     if opt.optimizer == "Adam":
         optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, weight_decay=opt.weight_decay)
@@ -168,12 +115,6 @@ def main(opt):
         raise argparse.ArgumentError
 
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=opt.milestones, gamma=opt.gamma)
-
-    # -------------------------
-    # Load the network
-    # -------------------------
-    if opt.resume and opt.pretrained:
-        raise argparse.ArgumentError
 
     # optionally resume from a checkpoint
     if opt.resume:
@@ -222,7 +163,7 @@ def main(opt):
     return
 
 def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module, train_loader: DataLoader, val_loader: DataLoader, 
-                   scheduler: optim.lr_scheduler.MultiStepLR, epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iters, opt, name):
+                   scheduler: optim.lr_scheduler.MultiStepLR, epoch: int, loss_iter, mse_iter, psnr_iter, ssim_iter, iters, opt, name):
     print("===> lr: ", optimizer.param_groups[0]["lr"])
     
     trainLoss = []
@@ -253,38 +194,34 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
         # ------------------------------------------------------------------------------
         # 1. Log the training message
         if steps % opt.log_interval == 0:
-            print("===> Epoch[{}]({}/{}): Loss: {:.6f}".format(epoch, iteration, len(train_loader), loss.item()))
+            print("===> [Epoch {}] [{:4d}/{:4d}]: Loss: {:.6f}".format(epoch, iteration, len(train_loader), loss.item()))
         
         # 2. Plot the gradient of each layer
-        if opt.grad_interval:
+        # if opt.grad_interval:
             # (Deprecated)
-            if steps % opt.grad_interval == 0:
-                layer_names, mean, abs_mean, std = [], [], [], []
+            # if steps % opt.grad_interval == 0:
+            #     layer_names, mean, abs_mean, std = [], [], [], []
 
-                for layer_name, param in model.named_parameters():
-                    layer_names.append('.'.join(layer_name.split('.')[1:]))
+            #     for layer_name, param in model.named_parameters():
+            #         layer_names.append('.'.join(layer_name.split('.')[1:]))
                     
-                    values = param.grad.detach().view(-1).cpu().numpy()
-                    mean.append(np.mean(values))
-                    abs_mean.append(np.mean(np.absolute(values)))
-                    std.append(np.std(values))
+            #         values = param.grad.detach().view(-1).cpu().numpy()
+            #         mean.append(np.mean(values))
+            #         abs_mean.append(np.mean(np.absolute(values)))
+            #         std.append(np.std(values))
                 
-                plt.clf()
-                plt.figure(figsize=(19.2, 10.8))
-                plt.subplot(3, 1, 1)
-                plt.bar(np.arange(len(std)), np.asarray(std), 0.5)
-                plt.title("STD vs layer")
-                plt.subplot(3, 1, 2)
-                plt.bar(np.arange(len(mean)), np.asarray(mean), 0.5)
-                plt.title("Mean vs layer")
-                plt.subplot(3, 1, 3)
-                plt.bar(np.arange(len(abs_mean)), np.asarray(abs_mean), 0.5)
-                plt.title("Mean(Abs()) vs layer")
-                # plt.savefig("./{}/{}/grad_std_{}.png".format(opt.detail, name, str(steps).zfill(len(str(opt.nEpochs * len(train_loader))))))
-                # plt.table(rowLabels=["Mean", "STD"], 
-                #         colLabels=layer_names,
-                #         cellText=np.asarray([mean, std], dtype=np.float32))
-                plt.savefig("./{}/{}/grad_{}.png".format(opt.detail, name, str(steps).zfill(len(str(opt.nEpochs * len(train_loader))))))
+            #     plt.clf()
+            #     plt.figure(figsize=(19.2, 10.8))
+            #     plt.subplot(3, 1, 1)
+            #     plt.bar(np.arange(len(std)), np.asarray(std), 0.5)
+            #     plt.title("STD vs layer")
+            #     plt.subplot(3, 1, 2)
+            #     plt.bar(np.arange(len(mean)), np.asarray(mean), 0.5)
+            #     plt.title("Mean vs layer")
+            #     plt.subplot(3, 1, 3)
+            #     plt.bar(np.arange(len(abs_mean)), np.asarray(abs_mean), 0.5)
+            #     plt.title("Mean(Abs()) vs layer")
+            #     plt.savefig("./{}/{}/grad_{}.png".format(opt.detail, name, str(steps).zfill(len(str(opt.nEpochs * len(train_loader))))))
         
         # 3. Validate the model
         if steps % opt.save_interval == 0:
@@ -312,7 +249,7 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
 
     return loss_iter, mse_iter, psnr_iter, ssim_iter, iters
 
-def details(opt, path):
+def details(opt, path=None):
     """
       Show and marked down the training settings
 
@@ -322,23 +259,20 @@ def details(opt, path):
 
       Return: None
     """
-    makedirs = []
-    
-    folder = os.path.dirname(path)
-    while not os.path.exists(folder):
-        makedirs.append(folder)
-        folder = os.path.dirname(folder)
-
-    while len(makedirs) > 0:
-        makedirs, folder = makedirs[:-1], makedirs[-1]
-        os.makedirs(folder)
 
     with open(path, "w") as textfile:
         for item, values in vars(opt).items():
-            msg = "{:16} {}".format(item, values)
-            
+            msg = "{:16} {}".format(item, values)            
             print(msg)
-            textfile.write(msg + '\n')
+
+    if path is not None:
+        folder = os.path.dirname(path)
+        os.makedirs(folder, exist_ok=True)
+
+        with open(path, "w") as textfile:
+            for item, values in vars(opt).items():
+                msg = "{:16} {}".format(item, values)
+                textfile.write(msg + '\n')
     
     return
 
@@ -406,6 +340,8 @@ def grid_show(model: nn.Module, loader: DataLoader, folder, nrow=8, normalize=Fa
 
     torchvision.utils.save_image(images, "{}/{}_{}.png".format(epoch, iteration))
 
+    return
+
 def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, iteration, normalize=False):
     """
       Params:
@@ -438,15 +374,10 @@ def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, 
                 label  = label * std[:, None, None] + mean[:, None, None]
                 output = output * std[:, None, None] + mean[:, None, None]
 
-            # Dimension: (batchsize, width, height, channel)
-            # output = output.permute(0, 2, 3, 1).cpu().numpy()
-            # label  = label.permute(0, 2, 3, 1).cpu().numpy()
-
             mse  = criterion(output, label).item()
             psnr = 10 * np.log10(1.0 / mse)
             psnrs.append(psnr)
 
-        # TODO: Add grid_show
         # grid_show(model, loader, os.path.join(opt.log, name))
         print("[Vaild] epoch: {}, mse:  {}".format(epoch, np.mean(mse)))
         print("[Vaild] epoch: {}, psnr: {}".format(epoch, np.mean(psnr)))
@@ -456,7 +387,67 @@ def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, 
 if __name__ == "__main__":
     os.system('clear')
 
+    parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
+
+    # Basic Training settings
+    parser.add_argument("--rb", default=18, type=int, help="number of residual blocks")
+    parser.add_argument("--batchsize", default=16, type=int, help="training batch size")
+    parser.add_argument("--epochs", default=15, type=int, help="number of epochs to train for")
+    parser.add_argument("--lr", default=1e-4, type=float, help="Learning Rate. Default=1e-4")
+    parser.add_argument("--activation", default="LeakyReLU", type=str, help="the activation function use at training")
+    parser.add_argument("--normalize", default=True, action="store_true", help="normalized the dataset images")
+    parser.add_argument("--milestones", default=[10], type=int, nargs='*', help="Which epoch to decay the learning rate")
+    parser.add_argument("--gamma", default=0.1, type=float, help="The ratio of decaying learning rate everytime")
+    parser.add_argument("--starts", default=1, type=int, help="Manual epoch number (useful on restarts)")
+    parser.add_argument("--momentum", default=0.9, type=float, help="SGD Momentum, Default: 0.9")
+    parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
+    parser.add_argument("--weight_decay", default=0, type=float, help="The weight penalty in the training")
+    parser.add_argument("--optimizer", default="Adam", type=str, help="Choose the optimizer")
+
+    # Message logging, model saving setting
+    parser.add_argument("--tag", default="Indoor_512_Normalize", type=str, help="tag for this training")
+    parser.add_argument("--checkpoints", default="/media/disk1/EdwardLee/checkpoints", type=str, help="path to save the checkpoints")
+    parser.add_argument("--val_interval", default=1000, type=int,  help="step to test the model performance")
+    parser.add_argument("--log_interval", default=10, type=int, help="interval per iterations to log the message")
+    # parser.add_argument("--grad_interval", default=0, type=int, help="interval per iterations to draw the gradient")
+    parser.add_argument("--save_interval", default=1000, type=int, help="interval per iterations to save the model")
+    parser.add_argument("--detail", default="./log", type=str, help="the root directory to save the training details")
+
+    # Device setting
+    parser.add_argument("--cuda", default=True, type=bool, help="Use cuda?")
+    parser.add_argument("--gpus", default=1, type=int, help="nums of gpu to use")
+    parser.add_argument("--threads", default=8, type=int, help="Number of threads for data loader to use.")
+    parser.add_argument("--fixrandomseed", default=False, help="train with fix random seed")
+
+    # Pretrain model setting
+    parser.add_argument("--resume", type=str, help="Path to checkpoint.")
+
+    # Dataloader setting
+    parser.add_argument("--train", default="/media/disk1/EdwardLee/dataset/ntire2018", type=str, help="path to load train datasets")
+    parser.add_argument("--val", default="/media/disk1/EdwardLee/dataset/ntire2018", type=str, help="path to load val datasets")
+
+    opt = parser.parse_args()
+
+    # Check arguments
     if opt.cuda and not torch.cuda.is_available():
         raise Exception("No GPU found, please run without --cuda")
     
+    if opt.resume and opt.pretrained:
+        raise ValueError("opt.resume and opt.pretrain should not be True in the same time.")
+
+    if opt.resume and (not os.path.isfile(opt.resume)):
+        raise ValueError("{} doesn't not exists".format(opt.resume))
+
+    if opt.pretrained and (not os.path.isfile(opt.pretrained)):
+        raise ValueError("{} doesn't not exists".format(opt.pretrained))
+
+    # Check data directory
+    for path in (opt.train, opt.val):
+        if not os.path.exists(path):
+            raise ValueError("{} doesn't exist".format(path))
+
+    # Make file directories
+    name = "{}_{}_{}_{}".format(opt.tag, date.today().strftime("%Y%m%d"), opt.rb, opt.batchsize)
+    os.makedirs(os.path.join(opt.checkpoints, name), exist_ok=True)
+
     main(opt)

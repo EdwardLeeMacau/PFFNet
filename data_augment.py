@@ -1,4 +1,8 @@
 """
+  FileName     [ test.py ]
+  PackageName  [ PFFNet ]
+  Synopsis     [ Generated the dehazed images from the PFFNet Model ]
+  
   library:
   * PIL == 5.4.1    pip3 install pillow
   * scipy           pip3 install scipy

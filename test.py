@@ -19,11 +19,6 @@ from torchvision import transforms
 from model.rpnet import Net
 from psnr_ssim import val
 
-"""
-  Some notes:
-  1. In pyTorch-1.0.1, torch.autograd.Variable is deprecated, the function Variable(tensor) return tensors
-  2. In pyTorch-0.4.0, numpy is doesn't support problem.
-"""
 
 device = 'cpu'
 # device = utils.selectDevice()
@@ -34,14 +29,11 @@ def predict(opt):
     if not os.path.exists(opt.checkpoint):
         raise FileNotFoundError("File doesn't exists: {}".format(opt.checkpoint))
 
-    # rb: Residual Blocks
     net = utils.loadModel(opt.checkpoint, Net(opt.rb), dataparallel=True).to(device)
     net.eval()
         
     # Test photos: Default Reside
-    # Ignore .keep for folder
     images = utils.load_all_image(opt.hazy)
-    if ".keep" in images:   images.remove(".keep")
 
     # Output photos path
     makedirs = []
@@ -54,7 +46,10 @@ def predict(opt):
         makedirs, folder = makedirs[:-1], makedirs[-1]
         os.makedirs(folder, exist_ok=True)
 
-    # Transform
+    # --------------------------------------------------------------
+    # Set the transform parameter,
+    #   if normalize: Add the normalize params of the pretrain model
+    # --------------------------------------------------------------
     if opt.normalize:
         transform = transforms.Compose([
             transforms.ToTensor(),
@@ -89,28 +84,16 @@ def predict(opt):
 
 def main():
     parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
-    parser.add_argument("--rb", type=int, default=18, help="number of residual blocks")
+    parser.add_argument("--rb", default=18, type=int, help="number of residual blocks")
     parser.add_argument("--checkpoint", type=str, help="root of model checkpoint")
-    parser.add_argument("--hazy", type=str, default="/media/disk1/EdwardLee/IndoorTest/hazy", help="path to load test images")
-    parser.add_argument("--cuda", default=False, help="Use cuda?")
-    parser.add_argument("--gpus", type=int, default=8, help="nums of gpu to use")
-    parser.add_argument("--dehazy", type=str, default="/media/disk1/EdwardLee/Output", help="path to save output images")
-    parser.add_argument("--record", type=str, default="./psnr_ssim.txt", help="wrote the result to the textfile")
-    parser.add_argument("--gt", type=str, default="/media/disk1/EdwardLee/IndoorTest/gt", help="path to load gt images")
-    parser.add_argument("--normalize", action="store_true", default=False, help="pre / post normalization of the images")
-    parser.add_argument("--detail", default="./log", help="path to read the training details")
+    parser.add_argument("--hazy", default="/media/disk1/EdwardLee/IndoorTest/hazy", type=str, help="path to load test images")
+    parser.add_argument("--cuda", default=True, help="Use cuda?")
+    parser.add_argument("--gpus", default=8, type=int, help="nums of gpu to use")
+    parser.add_argument("--dehazy", default="/media/disk1/EdwardLee/Output", type=str, help="path to save output images")
+    parser.add_argument("--record", default="./psnr_ssim.txt", type=str, help="wrote the result to the textfile")
+    parser.add_argument("--gt", default="/media/disk1/EdwardLee/IndoorTest/gt", type=str, help="path to load gt images")
+    parser.add_argument("--normalize", default=False, action="store_true", help="pre / post normalization of the images")
     parser.add_argument("--activation", default="LeakyReLU", help="the activation of the model")
-    
-    # subparser = parser.add_subparsers(required=True, dest="command", help="I-Haze / O-Haze / SOTS")
-
-    # ihazeparser = subparser.add_parser("I-Haze")
-    # ihazeparser.add_argument("--hazy", default="/media/disk1/EdwardLee/IndoorTest/hazy", type=str, help="path to load test datasets")
-
-    # ohazeparser = subparser.add_parser("O-Haze")
-    # ohazeparser.add_argument("--hazy", default="/media/disk1/EdwardLee/OutdoorTest/hazy", type=str, help="path to load test datasets")
-
-    # sotsparser = subparser.add_parser("SOTS")
-    # sotsparser.add_argument("--hazy", default="/media/disk1/EdwardLee/dataset/reside/SOTS/indoor", type=str, help="path to load test datasets")
 
     opt = parser.parse_args()
     tag = os.path.basename(os.path.dirname(opt.checkpoint))
@@ -120,9 +103,6 @@ def main():
     for item, value in vars(opt).items():
         print("{:16} {}".format(item, value))
 
-    hazes = sorted(utils.load_all_image(opt.hazy))
-    gts   = sorted(utils.load_all_image(opt.gt))
-
     # -----------------------------------------
     # Generate the images
     # -----------------------------------------
@@ -131,6 +111,7 @@ def main():
     # ----------------------------------------
     # Vaildate the performance on the test set
     # ---------------------------------------
+    gts = sorted(utils.load_all_image(opt.gt))
     dehazes = sorted(utils.load_all_image(opt.dehazy))
     val(dehazes, gts, opt.record)
 
