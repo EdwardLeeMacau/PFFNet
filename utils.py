@@ -9,8 +9,11 @@ import torchvision.transforms as transforms
 from PIL import Image
 from torch import nn, optim
 
+mean = torch.Tensor([0.485, 0.456, 0.406]).to(device)
+std = torch.Tensor([0.229, 0.224, 0.225]).to(device)
 
 def selectDevice():
+    """ Return the device available in computer """
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
 
@@ -18,12 +21,12 @@ def selectDevice():
 
 def weights_init_kaiming(m):
     """ 
-      Kaiming weights initial methods
+    Kaiming weights initial methods
 
-      Params:
-      - m: the models
-
-      Return: None 
+    Parameters
+    ----------
+    m : torch.nn.Module
+        the models 
     """
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
@@ -35,45 +38,31 @@ def weights_init_kaiming(m):
         m.weight.data.normal_(mean=0, std=math.sqrt(2. / 9. / 64.)).clamp_(-0.025, 0.025)
         nn.init.constant(m.bias.data, 0.0)
 
-
-def output_psnr_mse(img_orig, img_out):
-    squared_error = np.square(img_orig - img_out)
+def output_psnr_mse(origin, gen):
+    """ 
+    Measure the PSNR and MSE of 2 pictures 
+    
+    Parameters
+    ----------
+    origin, gen : np.ndarray
+        The ground truth and generated images
+    """
+    squared_error = np.square(origin - gen)
     mse = np.mean(squared_error)
     psnr = 10 * np.log10(1.0 / mse)
+
     return psnr
 
 
 def is_image_file(filename):
+    """ Return true if the file is an image. """
     filename_lower = filename.lower()
+
     return any(filename_lower.endswith(extension) for extension in ['.png', '.jpg', '.bmp', '.mat'])
 
 # Read the images in 1 folder.
 def load_all_image(path):
-    return [join(path, x) for x in listdir(path) if is_image_file(x)]
-
-# (Deprecated)
-# def save_checkpoint(model, root, epoch, model_folder, iteration=0):
-#     """ Only save the model and the epoch, but not the optimizer. """
-#     if iteration != 0:
-#         model_out_path = os.path.join(root, model_folder, "{}_{}.pth".format(epoch, iteration))
-#     else:
-#         model_out_path = os.path.join(root, model_folder, "{}.pth".format(epoch))
-# 
-#     state_dict = model.module.state_dict()
-#     for key in state_dict.keys():
-#         state_dict[key] = state_dict[key].cpu()
-# 
-#     if not os.path.exists("checkpoints"):
-#         os.makedirs("checkpoints")
-# 
-#     if not os.path.exists(os.path.join(root, model_folder)):
-#         os.makedirs(os.path.join(root, model_folder))
-# 
-#     torch.save({
-#         'epoch': epoch,
-#         'state_dict': state_dict}, model_out_path)
-#     print("Checkpoint saved to {}".format(model_out_path))
-
+    return [ join(path, x) for x in listdir(path) if is_image_file(x) ]
 
 class FeatureExtractor(nn.Module):
     def __init__(self, cnn, feature_layer=11):
@@ -86,23 +75,27 @@ class FeatureExtractor(nn.Module):
 
 def get_mean_and_std(dataset: torch.utils.data.Dataset):
     """
-      Return the mean and std value of dataset
+    Return the mean and std value of dataset
 
-      Params:
-      - dataset
+    Parameters
+    ----------
+    dataset : torch.utils.data.Dataset
+        dataset instance
 
-      Return:
-      - mean
-      - std
+    Return
+    ------
+    mean, std
     """
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=2)
     mean = torch.zeros(3)
     std = torch.zeros(3)
+
     print('==> Computing mean and std..')
     for inputs, targets in dataloader:
         for i in range(3):
             mean[i] += inputs[:,i,:,:].mean()
             std[i] += inputs[:,i,:,:].std()
+
     mean.div_(len(dataset))
     std.div_(len(dataset))
     return mean, std
@@ -155,10 +148,15 @@ def loadCheckpoint(checkpoint_path: str, model: nn.Module, optimizer: optim, sch
 
 def saveModel(checkpoint_path: str, model: nn.Module):
     """
-      Params:
-      - checkpoint_path: the directory of the model parameter
-      - feature: the structure of the feature extractor
-      - model: the neural network to save
+    Save the model's parameters
+
+    Parameters
+    ----------
+    checkpoint_path : str
+        the directory of the model parameter
+    
+    model : torch.nn.Module
+        the neural network to save
     """
     state = {'state_dict': model.state_dict()}
     torch.save(state, checkpoint_path)
@@ -167,10 +165,18 @@ def saveModel(checkpoint_path: str, model: nn.Module):
 
 def loadModel(checkpoint_path: str, model: nn.Module, dataparallel=False):
     """
-      Params:
-      - checkpoint_path: the directory of the model parameter
-      - model: the neural network to save
-      - dataparallel: If true, the key of the state_dict will have a 'module' prefix, remove it. 
+    Load the model parameters
+    
+    Parameters
+    ----------
+    checkpoint_path : str
+        the directory of the model parameter
+
+    model : torch.nn.Module
+        the neural network to load
+    
+    dataparallel : 
+        If true, the key of the state_dict will have a 'module' prefix, remove it. 
     """
     state = torch.load(checkpoint_path)
     
@@ -185,41 +191,40 @@ def loadModel(checkpoint_path: str, model: nn.Module, dataparallel=False):
 
 def checkpointToModel(checkpoint_path: str, model_path: str):
     """
-      Params:
-      - checkpoint: 
-          Includes model, optimizer, schduler, save epochs and iterations.
-      - model: 
-          Includes model parameters only
+    Return the model parameters in the checkpoint file
 
-      Return: None
+    Parameters
+    ----------
+    checkpoint : str
+        Includes model, optimizer, schduler, save epochs and iterations.
+    
+    model : str
+        Includes model parameters only
     """
     state = torch.load(checkpoint_path)
     newState = {'state_dict': state['state_dict']}
+
     torch.save(newState, model_path)
 
     return
 
 def details(opt, path=None):
     """
-      Show and marked down the training settings
+    Show and marked down the training settings
 
-      Params:
-      - opt: The namespace of the train setting (Usually argparser)
-      - path: the path output textfile
-
-      Return: None
+    Parameters
+    ----------
+    opt : namespace
+        The namespace of the train setting
+    
+    path : str, optional
+        the path to output textfile
     """
     makedirs = []
 
-    if path:        
+    if path is not None:        
         folder = os.path.dirname(path)
-        while not os.path.exists(folder):
-            makedirs.append(folder)
-            folder = os.path.dirname(folder)
-
-        while len(makedirs) > 0:
-            makedirs, folder = makedirs[:-1], makedirs[-1]
-            os.makedirs(folder)
+        os.makedirs(folder, exist_ok=True)
 
         with open(path, "w") as textfile:
             for item, values in vars(opt).items():

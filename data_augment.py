@@ -32,21 +32,21 @@ def random_augments(sp):
     w, h = raw_im_A.size
     l = min(h, w)
 
-    # -----------------------------
-    # Random crop from any coordinate
-    #   Size: Random choice from list
-    #   X: Uniform Choose
-    #   Y: Uniform Choose
-    #   Flip and 
-    # -----------------------------
+    # -------------------------------- #
+    # Random crop from any coordinate  #
+    #   Size: Random choice from list  #
+    #   X: Uniform Choose              # 
+    #   Y: Uniform Choose              # 
+    # -------------------------------- #
 
     for _ in range(args.location):
-        # --------------------------------------------------------------------
-        # Random choose size
-        #   if image size is smaller than 1024, only 512 is cropped.
-        #   if image_size is smaller than 1536, randomly choose 512 or 1024 as size
-        #   if image_size is larger than 1536, randomly choose 512, 1024 or 1536
-        # ----------------------------------------------------------------------
+        # -----------------------------------------------------------------------------# 
+        # Random choose size                                                           #
+        #   if image size is smaller than 1024, only 512 is cropped.                   #
+        #   if image_size is smaller than 1536, randomly choose 512 or 1024 as size    #
+        #   if image_size is larger than 1536, randomly choose 512, 1024 or 1536       #
+        # ---------------------------------------------------------------------------- #
+
         if l < 1024:   
             size = 512
         elif l < 1536:      
@@ -171,13 +171,13 @@ if __name__ == "__main__":
     for item, values in vars(args).items():
         print("{:16} {}".format(item, values))
 
-    # ----------------------------------------------------------
-    # Check folders here, make the directories if don't exist.
-    # 0.  The image
-    # 1.  Root folder
-    #     1.1 gt
-    #     1.2 hazy
-    # ---------------------------------------------------------
+    # --------------------------------------------------------- #
+    # Check folders here, make the directories if don't exist.  #
+    # 0.  The image                                             #
+    # 1.  Root folder                                           #
+    #     1.1 gt                                                #
+    #     1.2 hazy                                              #
+    # --------------------------------------------------------- #
     if not os.path.exists(args.hazy):
         raise IOError("File doesn't not exist: {}".format(args.hazy))
 
@@ -212,10 +212,10 @@ if __name__ == "__main__":
             os.system("rm -r" + os.path.join(args.output, "hazy"))
             os.makedirs(os.path.join(args.output, "hazy"))
     
-    # --------------------------------------------------------
-    # Generate the images
-    #     Using Function parallel working...
-    # --------------------------------------------------------
+    # ---------------------------------------- #
+    # Generate the images                      #
+    #     Using Function parallel working...   #
+    # ---------------------------------------- #
     splits = os.listdir(args.hazy)
 
     if args.step:

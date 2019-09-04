@@ -13,11 +13,9 @@ from datetime import date
 
 import numpy as np
 import torch
-# import torchsummary
 import torchvision
 from matplotlib import pyplot as plt
 from skimage.measure import compare_psnr, compare_ssim
-# from tensorboardX import SummaryWriter
 from torch import nn, optim
 from torch.backends import cudnn
 from torch.utils.data import DataLoader
@@ -37,22 +35,22 @@ cudnn.benchmark = True
 mean = torch.Tensor([0.485, 0.456, 0.406]).to(device)
 std  = torch.Tensor([0.229, 0.224, 0.225]).to(device)
 
-# ----------------------------------------------------------------------------
-# Normalization (mean shift)
-# ----------------------------------------------------------------------------
-# Normalization methods
-#   input = (input - mean[:, None, None]) / std[:, None, None]
-#
-# How to inverse:
-#   input = (input * std[:, None, None]) + mean[:, None, None]
-# 
-# Source code:
-#   tensor.sub_(mean[:, None, None]).div_(std[:, None, None])
-#
-# Pretrain network normalize parameterss
-#   mean = [0.485, 0.456, 0.406]
-#   std  = [0.229, 0.224, 0.225]
-# ----------------------------------------------------------------------------
+# ----------------------------------------------------------------- #
+# Normalization (mean shift)                                        #
+# ----------------------------------------------------------------- #
+# Normalization methods                                             #
+#   input = (input - mean[:, None, None]) / std[:, None, None]      #
+#                                                                   #
+# Reverse Operation:                                                #
+#   input = (input * std[:, None, None]) + mean[:, None, None]      #
+#                                                                   #
+# Source code:                                                      #
+#   tensor.sub_(mean[:, None, None]).div_(std[:, None, None])       #
+#                                                                   #
+# Pretrain network normalize parameters                             #
+#   mean = [0.485, 0.456, 0.406]                                    #
+#   std  = [0.229, 0.224, 0.225]                                    #
+# ----------------------------------------------------------------- #
 
 def main(opt):
     if opt.fixrandomseed:
@@ -72,8 +70,6 @@ def main(opt):
     else:
         img_transform = ToTensor()
 
-
-
     train_dataset = DatasetFromFolder(opt.train, transform=img_transform)
     val_dataset   = DatasetFromFolder(opt.val, transform=img_transform)
     train_loader  = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchsize, pin_memory=True, shuffle=True)
@@ -86,16 +82,16 @@ def main(opt):
     # ------------------------------------------------------------------------------ #
     model = Net(opt.rb)
     
-    # ------------------------------------------------------------------------------ #
-    # Loss: L1 Norm / L2 Norm / Perceptual loss                                      #
-    # ------------------------------------------------------------------------------ #
+    # ------------------------------------------- #
+    # Loss: L1 Norm / L2 Norm / Perceptual loss   #
+    # ------------------------------------------- #
     criterion = nn.MSELoss(size_average=True)
     
     # vgg16 = ...
 
-    # ------------------------------------------------------------------------------ #
-    # Optimizer and learning rate scheduler                                          #
-    # ------------------------------------------------------------------------------ #
+    # --------------------------------------- #
+    # Optimizer and learning rate scheduler   #
+    # --------------------------------------- #
     print("==========> Setting Optimizer: {}".format(opt.optimizer))
     if opt.optimizer == "Adam":
         optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, weight_decay=opt.weight_decay)
@@ -149,7 +145,7 @@ def main(opt):
     iterations = np.empty(0, dtype=float)
 
     print("==========> Training setting")
-    details(opt, "./{}/{}/{}".format(opt.detail, name, "args.txt"))
+    utils.details(opt, "./{}/{}/{}".format(opt.detail, name, "args.txt"))
 
     print("==========> Training")
     for epoch in range(opt.starts, opt.epochs + 1):
@@ -186,43 +182,18 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
         trainLoss.append(loss.item())
         optimizer.step()
 
-        # ------------------------------------------------------------------------------
-        # 1. Log the training message
-        # 2. Plot the gradient of each layer
-        # 3. Validate the model
-        # 4. Saving the network
-        # ------------------------------------------------------------------------------
+        # ----------------------------------------------------- #
+        # 1. Log the training message                           #
+        # 2. Plot the gradient of each layer (Deprecated)       #
+        # 3. Validate the model                                 #
+        # 4. Saving the network                                 #
+        # ----------------------------------------------------- #
         # 1. Log the training message
         if steps % opt.log_interval == 0:
             print("===> [Epoch {}] [{:4d}/{:4d}]: Loss: {:.6f}".format(epoch, iteration, len(train_loader), loss.item()))
         
-        # 2. Plot the gradient of each layer
-        # if opt.grad_interval:
-            # (Deprecated)
-            # if steps % opt.grad_interval == 0:
-            #     layer_names, mean, abs_mean, std = [], [], [], []
+        # 2. Plot the gradient of each layer (Deprecated)
 
-            #     for layer_name, param in model.named_parameters():
-            #         layer_names.append('.'.join(layer_name.split('.')[1:]))
-                    
-            #         values = param.grad.detach().view(-1).cpu().numpy()
-            #         mean.append(np.mean(values))
-            #         abs_mean.append(np.mean(np.absolute(values)))
-            #         std.append(np.std(values))
-                
-            #     plt.clf()
-            #     plt.figure(figsize=(19.2, 10.8))
-            #     plt.subplot(3, 1, 1)
-            #     plt.bar(np.arange(len(std)), np.asarray(std), 0.5)
-            #     plt.title("STD vs layer")
-            #     plt.subplot(3, 1, 2)
-            #     plt.bar(np.arange(len(mean)), np.asarray(mean), 0.5)
-            #     plt.title("Mean vs layer")
-            #     plt.subplot(3, 1, 3)
-            #     plt.bar(np.arange(len(abs_mean)), np.asarray(abs_mean), 0.5)
-            #     plt.title("Mean(Abs()) vs layer")
-            #     plt.savefig("./{}/{}/grad_{}.png".format(opt.detail, name, str(steps).zfill(len(str(opt.nEpochs * len(train_loader))))))
-        
         # 3. Validate the model
         if steps % opt.save_interval == 0:
             # In epoch testing and saving
@@ -248,33 +219,6 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
             draw_graphs(loss_iter, mse_iter, psnr_iter, ssim_iter, iters, len(train_loader), os.path.join(opt.detail, name))
 
     return loss_iter, mse_iter, psnr_iter, ssim_iter, iters
-
-def details(opt, path=None):
-    """
-      Show and marked down the training settings
-
-      Params:
-      - opt: The namespace of the train setting (Usually argparser)
-      - path: the path output textfile
-
-      Return: None
-    """
-
-    with open(path, "w") as textfile:
-        for item, values in vars(opt).items():
-            msg = "{:16} {}".format(item, values)            
-            print(msg)
-
-    if path is not None:
-        folder = os.path.dirname(path)
-        os.makedirs(folder, exist_ok=True)
-
-        with open(path, "w") as textfile:
-            for item, values in vars(opt).items():
-                msg = "{:16} {}".format(item, values)
-                textfile.write(msg + '\n')
-    
-    return
 
 def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch, savepath,
             loss_filename="loss.png", loss_log_filename="loss_log.png", psnr_filename="psnr.png"):
@@ -316,16 +260,7 @@ def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch, savepath,
     return
 
 def grid_show(model: nn.Module, loader: DataLoader, folder, nrow=8, normalize=False):
-    """
-      Params:
-      - model:
-      - loader:
-      - folder:
-      - nrow:
-      - normalize:
-
-      Return: None
-    """
+    """ Moved to graphs.py """
     iterator    = iter(loader)
     data, label = next(iterator)
     output      = model(data)
@@ -344,15 +279,26 @@ def grid_show(model: nn.Module, loader: DataLoader, folder, nrow=8, normalize=Fa
 
 def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, iteration, normalize=False):
     """
-      Params:
-      - model
-      - loader
-      - epoch
-      - criterion
-      - normalize
+    Validate the model
 
-      Return:
+    Parameters
+    ----------
+    model : 
+
+    loader : 
+    
+    epoch :
+    
+    criterion : 
+    
+    normalize
+
+    Return
+    ------
+    mse : np.float
       - np.mean(mse)
+    
+    psnr : np.float
       - np.mean(psnr)
     """
     psnrs, mses = [], []

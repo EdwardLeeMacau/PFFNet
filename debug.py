@@ -1,10 +1,10 @@
 import time
 
-import torchvision
 from tqdm import tqdm
-from torch.utils.data import DataLoader
 
+import torchvision
 from data import DatasetFromFolder
+from torch.utils.data import DataLoader
 
 
 def dataloader_unittest(train, test, threads=8, batchsize=16):

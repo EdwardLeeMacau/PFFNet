@@ -16,6 +16,14 @@ from PIL import Image
 import utils
 
 def psnr_ssim(img_dehaze: Image, img_gt: Image):
+    """
+    Calculate PSNR and SSIM value for 2 Images
+
+    Parameters
+    ----------
+    img_dehaze, img_gt : PIL.Image
+        (...)
+    """
     dehaze = scipy.misc.fromimage(img_dehaze).astype(float) / 255.0
     gt     = scipy.misc.fromimage(img_gt).astype(float) / 255.0
 
@@ -26,14 +34,15 @@ def psnr_ssim(img_dehaze: Image, img_gt: Image):
 
 def val(dehazes, gts, output_path=None):
     """
-      Validate the dehazing performance using PSNR and SSIM
+    Validate the dehazing performance using MSE, PSNR, SSIM
 
-      Params:
-      - dehazes
-      - gts
-      - output_path
-
-      Return: None
+    Parameters
+    ----------
+    dehazes :
+    
+    gts : 
+    
+    output_path :
     """
     psnrs = []
     ssims = []  

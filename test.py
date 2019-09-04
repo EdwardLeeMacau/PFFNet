@@ -2,7 +2,7 @@
 """
   FileName     [ test.py ]
   PackageName  [ PFFNet ]
-  Synopsis     [ Generated the dehazed images from the PFFNet Model ]
+  Synopsis     [ Generated the dehazed images by PFFNet Model ]
 """
 
 import argparse
@@ -16,12 +16,12 @@ import torch.nn as nn
 from torch.autograd import Variable
 from torchvision import transforms
 
+import psnr_ssim.val
 from model.rpnet import Net
 from psnr_ssim import val
 
 
 device = 'cpu'
-# device = utils.selectDevice()
 mean = torch.Tensor([0.485, 0.456, 0.406]).to(device)
 std  = torch.Tensor([0.229, 0.224, 0.225]).to(device)
 
@@ -82,6 +82,8 @@ def predict(opt):
         im_dehaze.save(os.path.join(opt.dehazy, filename))
         print("==========> File saved: {}".format(os.path.join(opt.dehazy, filename)))
 
+    # Can add yield function
+
 def main():
     parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
     parser.add_argument("--rb", default=18, type=int, help="number of residual blocks")
@@ -96,24 +98,24 @@ def main():
     parser.add_argument("--activation", default="LeakyReLU", help="the activation of the model")
 
     opt = parser.parse_args()
+
     tag = os.path.basename(os.path.dirname(opt.checkpoint))
     num_checkpoint = os.path.basename(opt.checkpoint).split('.')[0]
     opt.dehazy     = os.path.join(opt.dehazy, tag, num_checkpoint)
 
-    for item, value in vars(opt).items():
-        print("{:16} {}".format(item, value))
+    utils.details(opt, None)
 
-    # -----------------------------------------
-    # Generate the images
-    # -----------------------------------------
+    # -------------------- #
+    # Generate the images  #
+    # -------------------- #
     predict(opt)
 
-    # ----------------------------------------
-    # Vaildate the performance on the test set
-    # ---------------------------------------
+    # ---------------------------------------- #
+    # Vaildate the performance on the test set #
+    # ---------------------------------------- #
     gts = sorted(utils.load_all_image(opt.gt))
     dehazes = sorted(utils.load_all_image(opt.dehazy))
-    val(dehazes, gts, opt.record)
+    psnr_ssim.val(dehazes, gts, opt.record)
 
 if __name__ == "__main__":
     os.system("clear")
