@@ -344,6 +344,7 @@ def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, 
     return np.mean(mses), np.mean(psnrs)
 
 if __name__ == "__main__":
+    # Clean up OS screen
     os.system('clear')
 
     parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
@@ -353,7 +354,7 @@ if __name__ == "__main__":
     parser.add_argument("--batchsize", default=16, type=int, help="training batch size")
     parser.add_argument("--epochs", default=15, type=int, help="number of epochs to train for")
     parser.add_argument("--lr", default=1e-4, type=float, help="Learning Rate. Default=1e-4")
-    parser.add_argument("--activation", default="LeakyReLU", type=str, help="the activation function use at training")
+    # parser.add_argument("--activation", default="LeakyReLU", type=str, help="the activation function use at training")
     parser.add_argument("--normalize", default=True, action="store_true", help="normalized the dataset images")
     parser.add_argument("--milestones", default=[10], type=int, nargs='*', help="Which epoch to decay the learning rate")
     parser.add_argument("--gamma", default=0.1, type=float, help="The ratio of decaying learning rate everytime")
@@ -364,8 +365,8 @@ if __name__ == "__main__":
     parser.add_argument("--optimizer", default="Adam", type=str, help="Choose the optimizer")
 
     # Message logging, model saving setting
-    parser.add_argument("--tag", default="Indoor_512_Normalize", type=str, help="tag for this training")
-    parser.add_argument("--checkpoints", default="/media/disk1/EdwardLee/checkpoints", type=str, help="path to save the checkpoints")
+    parser.add_argument("--tag", default="Indoor", type=str, help="tag for this training")
+    parser.add_argument("--checkpoints", default="./checkpoints", type=str, help="Path to save checkpoints")
     parser.add_argument("--val_interval", default=1000, type=int,  help="step to test the model performance")
     parser.add_argument("--log_interval", default=10, type=int, help="interval per iterations to log the message")
     # parser.add_argument("--grad_interval", default=0, type=int, help="interval per iterations to draw the gradient")
@@ -382,8 +383,8 @@ if __name__ == "__main__":
     parser.add_argument("--resume", type=str, help="Path to checkpoint.")
 
     # Dataloader setting
-    parser.add_argument("--train", default="/media/disk1/EdwardLee/dataset/ntire2018", type=str, help="path to load train datasets")
-    parser.add_argument("--val", default="/media/disk1/EdwardLee/dataset/ntire2018", type=str, help="path to load val datasets")
+    parser.add_argument("--train", default="./dataset/ntire2018_640", type=str, help="path to load train datasets")
+    parser.add_argument("--val", default="./dataset/ntire2018_val", type=str, help="path to load val datasets")
 
     opt = parser.parse_args()
 
