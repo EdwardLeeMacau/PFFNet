@@ -5,12 +5,10 @@
 """
 
 import argparse
-import logging
-import logging.config
 import os
-import pprint
 from datetime import date
 
+import matplotlib
 import numpy as np
 import torch
 import torchvision
@@ -112,7 +110,7 @@ def main(opt):
 
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=opt.milestones, gamma=opt.gamma)
 
-    # optionally resume from a checkpoint
+    # Option: resume training process from checkpoint
     if opt.resume:
         if os.path.isfile(opt.resume):
             print("=> loading checkpoint '{}'".format(opt.resume))
@@ -120,7 +118,7 @@ def main(opt):
         else:
             raise Exception("=> no checkpoint found at '{}'".format(opt.resume))
 
-    # optionally copy weights from a checkpoint
+    # Option: load the weights from a pretrain network
     if opt.pretrained:
         if os.path.isfile(opt.pretrained):
             print("=> loading pretrained model '{}'".format(opt.pretrained))
@@ -128,6 +126,7 @@ def main(opt):
         else:
             raise Exception("=> no pretrained model found at '{}'".format(opt.pretrained))
 
+    # Select training device
     if opt.cuda:
         print("==========> Setting GPU")
         model = nn.DataParallel(model, device_ids=[i for i in range(opt.gpus)]).cuda()
@@ -137,37 +136,41 @@ def main(opt):
         model = model.cpu()
         criterion = criterion.cpu()
 
-    # Extablish container
+    # Create container
     loss_iter  = np.empty(0, dtype=float)
     psnr_iter  = np.empty(0, dtype=float)
     ssim_iter  = np.empty(0, dtype=float)
     mse_iter   = np.empty(0, dtype=float)
     iterations = np.empty(0, dtype=float)
 
+    # Show training settings 
     print("==========> Training setting")
     utils.details(opt, "./{}/{}/{}".format(opt.detail, name, "args.txt"))
 
+    # Set plotter to plot the loss curves
+    fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(19.2, 10.8))
+
+    # Start training
     print("==========> Training")
     for epoch in range(opt.starts, opt.epochs + 1):
         scheduler.step()
 
+        # Main process
         loss_iter, mse_iter, psnr_iter, ssim_iter, iterations = train_val(
             model, optimizer, criterion, train_loader, val_loader, scheduler, 
-            epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iterations, opt, name
+            epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iterations, opt, name, fig, ax
         )
 
     return
 
 def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module, train_loader: DataLoader, val_loader: DataLoader, 
-                   scheduler: optim.lr_scheduler.MultiStepLR, epoch: int, loss_iter, mse_iter, psnr_iter, ssim_iter, iters, opt, name):
+                   scheduler: optim.lr_scheduler.MultiStepLR, epoch: int, loss_iter, mse_iter, psnr_iter, ssim_iter, iters, opt, name, fig, ax):
     print("===> lr: ", optimizer.param_groups[0]["lr"])
     
     trainLoss = []
 
     for iteration, (data, label) in enumerate(train_loader, 1):
-        # ------------------
-        # Train the network
-        # ------------------
+        # Train the network 
         model.train()
         optimizer.zero_grad()
 
@@ -192,7 +195,8 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
         if steps % opt.log_interval == 0:
             print("===> [Epoch {}] [{:4d}/{:4d}]: Loss: {:.6f}".format(epoch, iteration, len(train_loader), loss.item()))
         
-        # 2. Plot the gradient of each layer (Deprecated)
+        # 2. Plot the gradient of each layer 
+        # (Deprecated)
 
         # 3. Validate the model
         if steps % opt.save_interval == 0:
@@ -203,61 +207,68 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
         # 4. Saving the network
         if steps % opt.val_interval == 0:
             # mses, psnrs, ssims = test(val_loader, epoch, criterion)
+
             mse, psnr = validate(model, val_loader, criterion, epoch, iteration, normalize=opt.normalize)
             loss_iter = np.append(loss_iter, np.array([np.mean(trainLoss)]), axis=0)
             mse_iter  = np.append(mse_iter, np.array([mse]), axis=0)
             psnr_iter = np.append(psnr_iter, np.array([psnr]), axis=0)
             iters     = np.append(iters, np.array([steps / len(train_loader)]), axis=0)
 
-            trainLoss = []  # Clean the list 
-            
+            # Clean up the list
+            trainLoss = []
+
+            # Record the loss
             with open(os.path.join(opt.detail, name, "statistics.txt"), "w") as textfile:
-                datas = [str(data.tolist()) for data in (loss_iter, mse_iter, psnr_iter, ssim_iter, iters)]
+                datas = [ str(data.tolist()) for data in (loss_iter, mse_iter, psnr_iter, ssim_iter, iters) ]
                 textfile.write("\n".join(datas))
                 
             # Plot TrainLoss, valloss
-            draw_graphs(loss_iter, mse_iter, psnr_iter, ssim_iter, iters, len(train_loader), os.path.join(opt.detail, name))
+            draw_graphs(loss_iter, mse_iter, psnr_iter, ssim_iter, iters, len(train_loader), os.path.join(opt.detail, name), fig, ax)
 
     return loss_iter, mse_iter, psnr_iter, ssim_iter, iters
 
-def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch, savepath,
-            loss_filename="loss.png", loss_log_filename="loss_log.png", psnr_filename="psnr.png"):
-    # Linear scale of loss curve
-    plt.clf()
-    plt.figure(figsize=(12.8, 7.2))
-    plt.plot(x, train_loss, label="TrainLoss", color='b')
-    plt.plot(x, val_loss, label="ValLoss", color='r')
-    plt.plot(x, np.repeat(np.amin(val_loss), len(x)), ':')
-    plt.legend(loc=0)
-    plt.xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
-    plt.title("Loss vs Epochs")
-    plt.savefig(os.path.join(savepath, loss_filename))
+def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch, savepath, fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes, loss_filename="loss.png"):
+    """
+    Plot out learning rate, training loss, validation loss and PSNR.
 
+    Parameters
+    ----------
+    train_loss, val_loss, psnr, ssim, x
+
+    iters_per_epoch
+
+    savepath
+
+    fig, ax
+
+    loss_filename, loss_log_filename, psnr_filename : str
+    """
+    # Linear scale of loss curve
+    ax[0].plot(x, train_loss, label="TrainLoss", color='b')
+    ax[0].plot(x, val_loss, label="ValLoss", color='r')
+    ax[0].plot(x, np.repeat(np.amin(val_loss), len(x)), ':')
+    ax[0].legend(loc=0)
+    ax[0].xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
+    ax[0].title("Loss vs Epochs")
+    
     # Log scale of loss curve
-    plt.clf()
-    plt.figure(figsize=(12.8, 7.2))
-    plt.plot(x, train_loss, label="TrainLoss", color='b')
-    plt.plot(x, val_loss, label="ValLoss", color='r')
-    plt.plot(x, np.repeat(np.amin(val_loss), len(x)), ':')
-    plt.legend(loc=0)
-    plt.xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
-    plt.yscale('log')
-    plt.title("Loss vs Epochs")
-    plt.savefig(os.path.join(savepath, loss_log_filename))
+    ax[1].plot(x, train_loss, label="TrainLoss", color='b')
+    ax[1].plot(x, val_loss, label="ValLoss", color='r')
+    ax[1].plot(x, np.repeat(np.amin(val_loss), len(x)), ':')
+    ax[1].legend(loc=0)
+    ax[1].xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
+    ax[1].yscale('log')
+    ax[1].title("Loss vs Epochs")
 
     # Linear scale of PSNR, SSIM
-    plt.clf()
-    plt.figure(figsize=(12.8, 7.2))
-    
-    plt.plot(x, psnr, label="PSNR", color='b')
-    plt.plot(x, np.repeat(np.amax(psnr), len(x)), ':')
-    plt.xlabel("Epochs(s) / Iteration: {}".format(iters_per_epoch))
-    plt.title("PSNR vs Epochs")
-        
-    plt.legend(loc=0)
-    plt.savefig(os.path.join(savepath, psnr_filename))
+    ax[2].plot(x, psnr, label="PSNR", color='b')
+    ax[2].plot(x, np.repeat(np.amax(psnr), len(x)), ':')
+    ax[2].xlabel("Epochs(s) / Iteration: {}".format(iters_per_epoch))
+    ax[2].title("PSNR vs Epochs")
 
-    return
+    plt.savefig(loss_filename)
+
+    return fig, ax
 
 def grid_show(model: nn.Module, loader: DataLoader, folder, nrow=8, normalize=False):
     """ Moved to graphs.py """
@@ -283,9 +294,11 @@ def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, 
 
     Parameters
     ----------
-    model : 
+    model : nn.Module
+        The neural networks to train
 
-    loader : 
+    loader : torch.utils.data.DataLoader
+        The training data
     
     epoch :
     
@@ -396,4 +409,5 @@ if __name__ == "__main__":
     name = "{}_{}_{}_{}".format(opt.tag, date.today().strftime("%Y%m%d"), opt.rb, opt.batchsize)
     os.makedirs(os.path.join(opt.checkpoints, name), exist_ok=True)
 
+    # Execute main process
     main(opt)
