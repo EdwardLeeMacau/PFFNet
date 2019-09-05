@@ -9,8 +9,8 @@ import torchvision.transforms as transforms
 from PIL import Image
 from torch import nn, optim
 
-mean = torch.Tensor([0.485, 0.456, 0.406]).to(device)
-std = torch.Tensor([0.229, 0.224, 0.225]).to(device)
+mean = torch.Tensor([0.485, 0.456, 0.406])
+std = torch.Tensor([0.229, 0.224, 0.225])
 
 def selectDevice():
     """ Return the device available in computer """

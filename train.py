@@ -12,6 +12,7 @@ import matplotlib
 import numpy as np
 import torch
 import torchvision
+from torchvision import transforms
 from matplotlib import pyplot as plt
 from skimage.measure import compare_psnr, compare_ssim
 from torch import nn, optim
@@ -64,7 +65,6 @@ def main(opt):
             ToTensor(),
             Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
-        print("==========> Using Normalization")
     else:
         img_transform = ToTensor()
 
@@ -73,18 +73,18 @@ def main(opt):
     train_loader  = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchsize, pin_memory=True, shuffle=True)
     val_loader    = DataLoader(dataset=val_dataset, num_workers=opt.threads, batch_size=opt.batchsize, pin_memory=True, shuffle=True)
     
-    print("==========> Building model")
+
     # ------------------------------------------------------------------------------ #
     # Notes: 20190515                                                                #
     #   The original model doesn't set any activation function in the output layer.  #
     # ------------------------------------------------------------------------------ #
+    print("==========> Building model")
     model = Net(opt.rb)
     
     # ------------------------------------------- #
     # Loss: L1 Norm / L2 Norm / Perceptual loss   #
     # ------------------------------------------- #
-    criterion = nn.MSELoss(size_average=True)
-    
+    criterion = nn.MSELoss(size_average=True)    
     # vgg16 = ...
 
     # --------------------------------------- #
@@ -206,8 +206,6 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
         
         # 4. Saving the network
         if steps % opt.val_interval == 0:
-            # mses, psnrs, ssims = test(val_loader, epoch, criterion)
-
             mse, psnr = validate(model, val_loader, criterion, epoch, iteration, normalize=opt.normalize)
             loss_iter = np.append(loss_iter, np.array([np.mean(trainLoss)]), axis=0)
             mse_iter  = np.append(mse_iter, np.array([mse]), axis=0)
@@ -223,11 +221,13 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
                 textfile.write("\n".join(datas))
                 
             # Plot TrainLoss, valloss
-            draw_graphs(loss_iter, mse_iter, psnr_iter, ssim_iter, iters, len(train_loader), os.path.join(opt.detail, name), fig, ax)
+            draw_graphs(loss_iter, mse_iter, psnr_iter, ssim_iter, iters, 
+                len(train_loader), os.path.join(opt.detail, name), fig, ax)
 
     return loss_iter, mse_iter, psnr_iter, ssim_iter, iters
 
-def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch, savepath, fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes, loss_filename="loss.png"):
+def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch, savepath, 
+        fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes, loss_filename="loss.png"):
     """
     Plot out learning rate, training loss, validation loss and PSNR.
 
@@ -300,19 +300,18 @@ def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, 
     loader : torch.utils.data.DataLoader
         The training data
     
-    epoch :
+    epoch : int
     
-    criterion : 
+    criterion : nn.Module
+        Loss function 
     
-    normalize
+    normalize : bool
+        If true, normalize the image before and after the NN.
 
     Return
     ------
-    mse : np.float
-      - np.mean(mse)
-    
-    psnr : np.float
-      - np.mean(psnr)
+    mse, psnr : np.float
+        np.mean(mse) and np.mean(psnr)
     """
     psnrs, mses = [], []
     model.eval()
@@ -355,7 +354,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", default=15, type=int, help="number of epochs to train for")
     parser.add_argument("--lr", default=1e-4, type=float, help="Learning Rate. Default=1e-4")
     # parser.add_argument("--activation", default="LeakyReLU", type=str, help="the activation function use at training")
-    parser.add_argument("--normalize", default=True, action="store_true", help="normalized the dataset images")
+    parser.add_argument("--normalize", action="store_true", help="normalized the dataset images")
     parser.add_argument("--milestones", default=[10], type=int, nargs='*', help="Which epoch to decay the learning rate")
     parser.add_argument("--gamma", default=0.1, type=float, help="The ratio of decaying learning rate everytime")
     parser.add_argument("--starts", default=1, type=int, help="Manual epoch number (useful on restarts)")
@@ -374,7 +373,7 @@ if __name__ == "__main__":
     parser.add_argument("--detail", default="./log", type=str, help="the root directory to save the training details")
 
     # Device setting
-    parser.add_argument("--cuda", default=True, type=bool, help="Use cuda?")
+    parser.add_argument("--cuda", type=bool, help="Use cuda?")
     parser.add_argument("--gpus", default=1, type=int, help="nums of gpu to use")
     parser.add_argument("--threads", default=8, type=int, help="Number of threads for data loader to use.")
     parser.add_argument("--fixrandomseed", default=False, help="train with fix random seed")
@@ -406,8 +405,8 @@ if __name__ == "__main__":
         if not os.path.exists(path):
             raise ValueError("{} doesn't exist".format(path))
 
-    # Make file directories
-    name = "{}_{}_{}_{}".format(opt.tag, date.today().strftime("%Y%m%d"), opt.rb, opt.batchsize)
+    # Make folder directories
+    name = "{}_{}".format(opt.tag, date.today().strftime("%Y%m%d"))
     os.makedirs(os.path.join(opt.checkpoints, name), exist_ok=True)
 
     # Execute main process
