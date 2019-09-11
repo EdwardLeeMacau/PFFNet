@@ -14,14 +14,6 @@ import torchvision.transforms
 from PIL import Image
 from torch.utils.data import DataLoader
 
-# Training settings
-parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
-parser.add_argument("--train", default="/media/disk1/EdwardLee/IndoorTrain_512", type=str, help="path to load train datasets")
-parser.add_argument("--test", default="/media/disk1/EdwardLee/IndoorTest", type=str, help="path to load test datasets")
-parser.add_argument("--batchSize", type=int, default=16, help="training batch size")
-parser.add_argument("--threads", default=4, help="Number of threads for data loader to use")
-args = parser.parse_args()
-
 def is_image_file(filename):
     filename_lower = filename.lower()
     return any(filename_lower.endswith(extension) for extension in ['.png', '.jpg', '.bmp', '.mat'])
@@ -29,8 +21,8 @@ def is_image_file(filename):
 class DatasetFromFolder(data.Dataset):
     def __init__(self, image_dir, transform=None):
         super(DatasetFromFolder, self).__init__()
-        data_dir  = os.path.join(image_dir, "hazy")
-        label_dir = os.path.join(image_dir, "gt")
+        data_dir  = os.path.join(image_dir, "Hazy")
+        label_dir = os.path.join(image_dir, "Gt")
         self.data_filenames  = sorted([os.path.join(data_dir, x) for x in os.listdir(data_dir) if is_image_file(x)])
         self.label_filenames = sorted([os.path.join(label_dir, x) for x in os.listdir(label_dir) if is_image_file(x)])
 
