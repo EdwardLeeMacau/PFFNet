@@ -239,8 +239,7 @@ def main(opt):
 
     return
 
-def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module, perceptual: LossNetwork, train_loader: DataLoader, val_loader: DataLoader, scheduler: optim.lr_scheduler.MultiStepLR, epoch: int, loss_iter, mse_iter, psnr_iter, ssim_iter, iters, opt, name, 
-        fig: matplotlib.figure.Figure, ax:matplotlib.axes.Axes):
+def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module, perceptual: LossNetwork, train_loader: DataLoader, val_loader: DataLoader, scheduler: optim.lr_scheduler.MultiStepLR, epoch: int, loss_iter, mse_iter, psnr_iter, ssim_iter, iters, opt, name, fig: matplotlib.figure.Figure, ax:matplotlib.axes.Axes):
     print("===> lr: ", optimizer.param_groups[0]["lr"])
     
     trainLoss = []
@@ -297,16 +296,19 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
             with open(os.path.join(opt.detail, name, "statistics.txt"), "w") as textfile:
                 datas = [ str(data.tolist()) for data in (loss_iter, mse_iter, psnr_iter, ssim_iter, iters) ]
                 textfile.write("\n".join(datas))
+
+            # Show images in grid with validation set
+            pass
                 
             # Plot TrainLoss, valloss
-            fig, ax = draw_graphs(loss_iter, mse_iter, psnr_iter, ssim_iter, iters, len(train_loader), fig, ax)
-
+            fig, ax = training_curve(loss_iter, mse_iter, psnr_iter, ssim_iter, iters, optimizer.param_groups[0]["lr"], epoch, len(train_loader), fig, ax)
+            
+            plt.tight_layout()
             plt.savefig(os.path.join(opt.detail, name, "loss.png"))
 
     return loss_iter, mse_iter, psnr_iter, ssim_iter, iters, fig, ax
 
-def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch,
-        fig: matplotlib.figure.Figure, axis: matplotlib.axes.Axes):
+def training_curve(train_loss, val_loss, psnr, ssim, x, lr, epoch, iters_per_epoch, fig: matplotlib.figure.Figure, axis: matplotlib.axes.Axes):
     """
     Plot out learning rate, training loss, validation loss and PSNR.
 
@@ -314,14 +316,16 @@ def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch,
     ----------
     train_loss, val_loss, psnr, ssim, x
 
-    iters_per_epoch
+    iters_per_epoch : int
+        To show the iterations in the epoch
 
-    savepath
+    fig, axis : matplotlib.figure.Figure, matplotlib.axes.Axes
+        matplotlib plotting object.
 
-    fig, ax: matplotlib.figure.Figure, matplotlib.axes.Axes
-       matplotlib plotting object.
-
-    loss_filename : str
+    Return
+    ------
+    fig, axis : matplotlib.figure.Figure, matplotlib.axes.Axes
+        matplotlib plotting object
     """
     # Linear scale of loss curve
     ax = axis[0][0]
@@ -329,7 +333,7 @@ def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch,
     ax.plot(x, val_loss, label="ValLoss", color='r')
     ax.plot(x, np.repeat(np.amin(val_loss), len(x)), ':')
     ax.set_xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
-    ax.set_title("Loss vs Epochs")
+    ax.set_title("Loss")
     
     # Log scale of loss curve
     ax = axis[0][1]
@@ -338,14 +342,20 @@ def draw_graphs(train_loss, val_loss, psnr, ssim, x, iters_per_epoch,
     ax.plot(x, np.repeat(np.amin(val_loss), len(x)), ':')
     ax.set_xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
     ax.set_yscale('log')
-    ax.set_title("Loss vs Epochs(Log scale)")
+    ax.set_title("Loss(Log scale)")
 
     # Linear scale of PSNR, SSIM
     ax = axis[1][0]
     ax.plot(x, psnr, label="PSNR", color='b')
     ax.plot(x, np.repeat(np.amax(psnr), len(x)), ':')
     ax.set_xlabel("Epochs(s) / Iteration: {}".format(iters_per_epoch))
-    ax.set_title("PSNR vs Epochs")
+    ax.set_title("Average PSNR")
+
+    # Learning Rate Curve
+    ax = axis[1][1]
+    ax.set_xlabel("Epochs(s) / Iteration: {}".format(iters_per_epoch))
+    ax.set_title("Learing Rate")
+
 
     return fig, axis
 

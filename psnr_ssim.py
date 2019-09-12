@@ -23,6 +23,11 @@ def psnr_ssim(img_dehaze: Image, img_gt: Image):
     ----------
     img_dehaze, img_gt : PIL.Image
         (...)
+
+    Return
+    ------
+    psnr, ssim : np.float32
+        PSNR and SSIM value of the image pair.
     """
     dehaze = scipy.misc.fromimage(img_dehaze).astype(float) / 255.0
     gt     = scipy.misc.fromimage(img_gt).astype(float) / 255.0
@@ -38,11 +43,11 @@ def val(dehazes, gts, output_path=None):
 
     Parameters
     ----------
-    dehazes :
+    dehazes, gt : list-like
+        The file name of dehazed images and ground truth images
     
-    gts : 
-    
-    output_path :
+    output_path : {str, None} optional
+        If not None, save the PSNR and SSIM to the Textfile
     """
     psnrs = []
     ssims = []  
@@ -68,18 +73,19 @@ def val(dehazes, gts, output_path=None):
     return
     
 def main():
-    parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
-    parser.add_argument("--dehaze", type=str, default="/media/disk1/EdwardLee/Output/", help="path to load dehaze images")
-    parser.add_argument("--gt", type=str, default="/media/disk1/EdwardLee/IndoorTest/gt", help="path to load gt images")
-    parser.add_argument("--output", type=str)
-
-    opt = parser.parse_args()
-    print(opt)
-
     dehazes = utils.load_all_image(opt.dehaze).sort()
     gts     = utils.load_all_image(opt.gt).sort()
 
     val(dehazes, gts, opt.output)
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
+    parser.add_argument("--dehaze", type=str, default="./dataset/Output/", help="path to load dehaze images")
+    parser.add_argument("--gt", type=str, default="./dataset/NTIRE2018_RAW/GT", help="path to load gt images")
+    parser.add_argument("--output", type=str)
+
+    opt = parser.parse_args()
+
+    utils.detail(opt, None)
+
+    main(opt)

@@ -21,6 +21,7 @@ from scipy.misc import imsave
 from scipy.ndimage import rotate
 
 def random_augments(sp):
+    """ Random crop and rotate augmentation """
     print("Process %s" % sp)
 
     count_im = 0
@@ -94,6 +95,7 @@ def random_augments(sp):
     print("Process %s for %d" % (sp, count_im))
 
 def augments(sp):
+    """ Regular crop and rotation Augmentation """
     print("Process %s" % sp)
 
     count_im = 0
@@ -221,6 +223,7 @@ if __name__ == "__main__":
     if args.step:
         # print("Executing: augments")
         Parallel(-1)(delayed(augments)(sp) for sp in splits)
-    elif args.random:
+    
+    if args.random:
         # print("Executing: random_augments")
         Parallel(-1)(delayed(random_augments)(sp) for sp in splits)
