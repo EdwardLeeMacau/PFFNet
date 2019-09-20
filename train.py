@@ -10,11 +10,13 @@ from datetime import date
 
 import matplotlib
 import numpy as np
+import pandas as pd
 import torch
 import torchvision
 import torchvision.models
 from torchvision import transforms
 from matplotlib import pyplot as plt
+from matplotlib import gridspec
 from skimage.measure import compare_psnr, compare_ssim
 from torch import nn, optim
 from torch.backends import cudnn
@@ -54,6 +56,7 @@ std  = torch.Tensor([0.229, 0.224, 0.225]).to(device)
 # ----------------------------------------------------------------- #
 
 def main(opt):
+    """ Main process of train.py """
     if opt.fixrandomseed:
         seed = 1334
         torch.manual_seed(seed)
@@ -82,30 +85,44 @@ def main(opt):
     print("==========> Building model")
     model = Net(opt.rb)
     
-    # ------------------------------------------- #
-    # Loss: L1 Norm / L2 Norm / Perceptual loss   #
-    # ------------------------------------------- #
+    # ------------------------------- #
+    # Loss: L1 Norm / L2 Norm         #
+    # ------------------------------- #
     criterion = nn.MSELoss(size_average=True)
     perceptual = None
 
+    # ------------------------------- #
+    # Option: Perceptual loss         #
+    # ------------------------------- #
     if opt.perceptual == 'vgg16':
         print("==========> Using VGG16 as Perceptual Loss Model")
         perceptual = LossNetwork(torchvision.models.vgg16(pretrained=True), lossnet.VGG16_Layer)
-        perceptual.eval()
 
     if opt.perceptual == 'vgg16_bn':
         print("==========> Using VGG16 with Batch Normalization as Perceptual Loss Model")
         perceptual = LossNetwork(torchvision.models.vgg16_bn(pretrained=True), lossnet.VGG16_bn_Layer)
-        perceptual.eval()
 
     if opt.perceptual == 'vgg19':
         print("==========> Using VGG19 as Perceptual Loss Model")
         perceptual = LossNetwork(torchvision.models.vgg19(pretrained=True), lossnet.VGG19_Layer)
-        perceptual.eval()
 
     if opt.perceptual == 'vgg19_bn':
         print("==========> Using VGG19 with Batch Normalization as Perceptual Loss Model")
-        perceptual = LossNetwork(torchvision.models.vgg19_bn(pertrained=True), lossnet.VGG19_bn_Layer)
+        perceptual = LossNetwork(torchvision.models.vgg19_bn(pretrained=True), lossnet.VGG19_bn_Layer)
+
+    if opt.perceptual == "resnet18":
+        print("==========> Using Resnet18 as Perceptual Loss Model")
+        perceptual = LossNetwork(torchvision.models.resnet18(pretrained=True), lossnet.Resnet18_Layer)
+
+    if opt.perceptual == "resnet34":
+        print("==========> Using Resnet34 as Perceptual Loss Model")
+        perceptual = LossNetwork(torchvision.models.resnet34(pretrained=True), lossnet.Resnet34_Layer)
+
+    if opt.perceptual == "resnet50":
+        print("==========> Using Resnet50 as Perceptual Loss Model")
+        perceptual = LossNetwork(torchvision.models.resnet50(pertrained=True), lossnet.Resnet50_Layer)
+
+    if not perceptual is None:
         perceptual.eval()
 
     # --------------------------------------- #
@@ -213,6 +230,7 @@ def main(opt):
 
     # Create container
     loss_iter  = np.empty(0, dtype=float)
+    perc_iter  = np.empty(0, dtype=float)
     psnr_iter  = np.empty(0, dtype=float)
     ssim_iter  = np.empty(0, dtype=float)
     mse_iter   = np.empty(0, dtype=float)
@@ -222,27 +240,87 @@ def main(opt):
     print("==========> Training setting")
     utils.details(opt, "./{}/{}/{}".format(opt.detail, name, "args.txt"))
 
-    # Set plotter to plot the loss curves
-    fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(19.2, 10.8))
+    # -------------------------------------- #
+    # Set plotter to plot the loss curves    #
+    # -------------------------------------- #
+    fig, gs = plt.figure(figsize=(19.2, 10.8)), gridspec.GridSpec(2, 2)
+    
+    axis = [ fig.add_subplot(gs[i]) for i in range(4) ]
+    for ax in axis:
+        ax.set_xlabel("Epoch(s) / Iteration: {}".format(len(train_loader)))
+
+    # Linear scale of Loss
+    axis[0].set_ylabel("Image Loss")
+    axis[0].set_title("Loss")
+
+    if not perceptual is None:
+        axis.append( axis[0].twinx() )
+        axis[4].set_ylabel("Perceptual Loss")
+
+    # Log scale of Loss
+    axis[1].set_yscale('log')
+    axis[1].set_title("Loss(Log scale)")
+
+    if not perceptual is None:
+        axis.append( axis[0].twinx() )
+        axis[5].set_ylabel("Perceptual Loss")
+
+    # Linear scale of PSNR, SSIM
+    axis[2].set_title("Average PSNR")
+
+    # Learning Rate Curve
+    axis[3].set_title("Learning Rate")
+    axis[3].set_yscale('log')
 
     # ------------------------ #
     # Start training           #
     # ------------------------ #
     print("==========> Training")
     for epoch in range(opt.starts, opt.epochs + 1):
-        scheduler.step()
-
-        loss_iter, mse_iter, psnr_iter, ssim_iter, iterations, fig, ax = train_val(
+        loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, iterations, fig, ax = train_val(
             model, optimizer, criterion, perceptual, train_loader, val_loader, scheduler, 
-            epoch, loss_iter, mse_iter, psnr_iter, ssim_iter, iterations, opt, name, fig, ax
+            epoch, loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, iterations, opt, name, fig, axis
         )
+
+        scheduler.step()
 
     return
 
-def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module, perceptual: LossNetwork, train_loader: DataLoader, val_loader: DataLoader, scheduler: optim.lr_scheduler.MultiStepLR, epoch: int, loss_iter, mse_iter, psnr_iter, ssim_iter, iters, opt, name, fig: matplotlib.figure.Figure, ax:matplotlib.axes.Axes):
-    print("===> lr: ", optimizer.param_groups[0]["lr"])
+def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module, perceptual: LossNetwork, train_loader: DataLoader, val_loader: DataLoader, scheduler: optim.lr_scheduler.MultiStepLR, epoch: int, loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, iters, opt, name, fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes):
+    """
+    Main of training and vaildation
+
+    Parameters
+    ----------
+    model, optimizer, criterion : nn.Module, optim.Optimizer, nn.Module
+        The main elements of the Neural Network
+
+    perceptual : {nn.Module, None} optional
+        Pass None or a pretrained Neural Network to calculate perceptual loss
+
+    train_loader, val_loader : DataLoader
+        The training and validation dataset
+
+    scheduler : optim.lr_scheduler.MultiStepLR
+        Learning rate scheduler
+
+    epoch : int
+        The processing train epoch
+
+    loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, iters : 1D-Array like
+        The container to record the training performance
+
+    opt : namespace
+        The training option
+
+    name : str
+        (...)
     
-    trainLoss = []
+    fig, ax : matplotlib.figure.Figure, matplotlib.axes.Axes
+        (...)
+    """
+    trainloss = []
+    perceloss = []
 
     for iteration, (data, label) in enumerate(train_loader, 1):
         model.train()
@@ -251,30 +329,49 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
         steps = len(train_loader) * (epoch - 1) + iteration
 
         data, label = data.to(device), label.to(device)
-
         output = model(data)
-        loss = criterion(output, label)
+
+        # Calculate loss
+        image_loss = criterion(output, label)
 
         if perceptual is not None:
-            loss += opt.perceptual_weight * perceptual(output, label)
+            perceptual_loss = perceptual(output, label)
+
+        # Backpropagation
+        if perceptual is not None:
+            loss = image_loss + opt.perceptual_weight * perceptual_loss
+        else:
+            loss = image_loss
 
         loss.backward()
-
-        trainLoss.append(loss.item())
         optimizer.step()
 
+        # Record the training loss
+        trainloss.append(image_loss.item())
+        if perceptual is not None:
+            perceloss.append(perceptual_loss.item())
+
         # ----------------------------------------------------- #
-        # 1. Log the training message                           #
+        # Execute for a period                                  #
+        # 1. Print the training message                         #
         # 2. Plot the gradient of each layer (Deprecated)       #
         # 3. Validate the model                                 #
         # 4. Saving the network                                 #
         # ----------------------------------------------------- #
-        # 1. Log the training message
+        # 1. Print the training message
         if steps % opt.log_interval == 0:
-            print("===> [Epoch {}] [{:4d}/{:4d}]: Loss: {:.6f}".format(epoch, iteration, len(train_loader), loss.item()))
+            msg = "===> [Epoch {}] [{:4d}/{:4d}] ImgLoss: {:.6f}".format(epoch, iteration, len(train_loader), loss.item())
         
+            if not perceptual is None:
+                msg = "\t".join([msg, "PerceptualLoss: {:.6f}".format(perceptual_loss.item())])
+
+            print(msg)
+
         # 2. Plot the gradient of each layer 
         # (Deprecated)
+        
+        # 2.1 Print the gradient statistic message for each layer
+        # (NotImplementedError)
 
         # 3. Save the model
         if steps % opt.save_interval == 0:
@@ -284,78 +381,129 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
         # 4. Validating the network
         if steps % opt.val_interval == 0:
             mse, psnr = validate(model, val_loader, criterion, epoch, iteration, normalize=opt.normalize)
-            loss_iter = np.append(loss_iter, np.array([np.mean(trainLoss)]), axis=0)
+
+            loss_iter = np.append(loss_iter, np.array([np.mean(trainloss)]), axis=0)
             mse_iter  = np.append(mse_iter, np.array([mse]), axis=0)
             psnr_iter = np.append(psnr_iter, np.array([psnr]), axis=0)
             iters     = np.append(iters, np.array([steps / len(train_loader)]), axis=0)
 
-            # Clean up the list
-            trainLoss = []
+            if not perceptual is None:
+                perc_iter = np.append(perc_iter, np.array([np.mean(perceloss)]), axis=0)
 
-            # Record the loss
-            with open(os.path.join(opt.detail, name, "statistics.txt"), "w") as textfile:
-                datas = [ str(data.tolist()) for data in (loss_iter, mse_iter, psnr_iter, ssim_iter, iters) ]
-                textfile.write("\n".join(datas))
+            # Clean up the list
+            trainloss = []
+            perceloss = []
+
+            # Save the loss
+            df = pd.DataFrame(data={
+                'Iterations':      iters * len(train_loader),
+                'TrainL2Loss':     loss_iter, 
+                'TrainPerceptual': perc_iter,
+                'ValidationLoss':  mse_iter, 
+                'ValidationPSNR':  psnr_iter
+            })
+
+            # Maximum Message
+            # if df.shape[0] > 5:
+            df = df.append(df.nlargest(5, 'ValidationPSNR'))#.set_index(pd.Index([ "Top{}".format(i) for i in range(1, 6) ])))
+
+            df.to_excel(os.path.join(opt.detail, name, "statistical.xlsx"))
+
+            # with open(os.path.join(opt.detail, name, "statistics.txt"), "w") as textfile:
+            #     datas = [ str(data.tolist()) for data in (loss_iter, mse_iter, psnr_iter, ssim_iter, iters) ]
+            #     textfile.write("\n".join(datas))
 
             # Show images in grid with validation set
-            pass
+            # pass
                 
-            # Plot TrainLoss, valloss
-            fig, ax = training_curve(loss_iter, mse_iter, psnr_iter, ssim_iter, iters, optimizer.param_groups[0]["lr"], epoch, len(train_loader), fig, ax)
+            # Plot TrainLoss, ValidationLoss
+            fig, ax = training_curve(
+                loss_iter, 
+                perc_iter, 
+                mse_iter, 
+                psnr_iter, 
+                ssim_iter, 
+                iters, 
+                optimizer.param_groups[0]["lr"], 
+                epoch, len(train_loader), 
+                fig, ax
+            )
             
             plt.tight_layout()
             plt.savefig(os.path.join(opt.detail, name, "loss.png"))
 
-    return loss_iter, mse_iter, psnr_iter, ssim_iter, iters, fig, ax
+    return loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, iters, fig, ax
 
-def training_curve(train_loss, val_loss, psnr, ssim, x, lr, epoch, iters_per_epoch, fig: matplotlib.figure.Figure, axis: matplotlib.axes.Axes):
+def training_curve(train_loss, perc_iter, val_loss, psnr, ssim, x, lr, epoch, iters_per_epoch, fig: matplotlib.figure.Figure, axis: matplotlib.axes.Axes):
     """
     Plot out learning rate, training loss, validation loss and PSNR.
 
     Parameters
     ----------
-    train_loss, val_loss, psnr, ssim, x
+    train_loss, perc_iter, val_loss, psnr, ssim, lr, x: 1D-array like
+        (...)
 
     iters_per_epoch : int
         To show the iterations in the epoch
 
     fig, axis : matplotlib.figure.Figure, matplotlib.axes.Axes
-        matplotlib plotting object.
+        Matplotlib plotting object.
 
     Return
     ------
     fig, axis : matplotlib.figure.Figure, matplotlib.axes.Axes
-        matplotlib plotting object
+        The training curve
     """
     # Linear scale of loss curve
-    ax = axis[0][0]
-    ax.plot(x, train_loss, label="TrainLoss", color='b')
-    ax.plot(x, val_loss, label="ValLoss", color='r')
-    ax.plot(x, np.repeat(np.amin(val_loss), len(x)), ':')
+    ax = axis[0]
+    lines = []
+    line1, = ax.plot(x, val_loss, label="ValLoss", color='red', linewidth=0.5)
+    line2, = ax.plot(x, train_loss, label="TrainLoss", color='blue', linewidth=0.5)
+    line3, = ax.plot(x, np.repeat(np.amin(val_loss), len(x)), linestyle=':', linewidth=0.5)
+    # ax.text(x, y, "{}: {}".format(x, y))
     ax.set_xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
+    ax.set_ylabel("Image Loss")
     ax.set_title("Loss")
+
+    if perc_iter is not None:
+        ax = axis[4]
+        line4, = ax.plot(x, perc_iter, label="PerceptualLoss", color='green', linewidth=0.5)
+        ax.set_ylabel("Perceptual Loss")
+
+    ax.legend(handles=(line1, line2, line4, ))
     
     # Log scale of loss curve
-    ax = axis[0][1]
-    ax.plot(x, train_loss, label="TrainLoss", color='b')
-    ax.plot(x, val_loss, label="ValLoss", color='r')
-    ax.plot(x, np.repeat(np.amin(val_loss), len(x)), ':')
+    ax = axis[1]
+    ax.plot(x, train_loss, label="TrainLoss", color='blue', linewidth=0.5)
+    ax.plot(x, val_loss, label="ValLoss", color='red', linewidth=0.5)
+    ax.plot(x, np.repeat(np.amin(val_loss), len(x)), linestyle=':', linewidth=0.5)
     ax.set_xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
     ax.set_yscale('log')
     ax.set_title("Loss(Log scale)")
 
+    if perc_iter is not None:
+        ax = axis[5]
+        ax.plot(x, perc_iter, label="PerceptualLoss", color='green', linewidth=0.5)
+        ax.set_ylabel("Perceptual Loss")
+
     # Linear scale of PSNR, SSIM
-    ax = axis[1][0]
-    ax.plot(x, psnr, label="PSNR", color='b')
-    ax.plot(x, np.repeat(np.amax(psnr), len(x)), ':')
+    ax = axis[2]
+    line1, = ax.plot(x, psnr, label="PSNR", color='b', linewidth=0.5)
+    line2, = ax.plot(x, np.repeat(np.amax(psnr), len(x)), linestyle=':', linewidth=0.5)
     ax.set_xlabel("Epochs(s) / Iteration: {}".format(iters_per_epoch))
-    ax.set_title("Average PSNR")
+    ax.set_ylabel("Average PSNR")
+    ax.set_title("Validatio Performance")
+
+    ax.legend(handles=(line1, ))
 
     # Learning Rate Curve
-    ax = axis[1][1]
+    ax = axis[3]
     ax.set_xlabel("Epochs(s) / Iteration: {}".format(iters_per_epoch))
-    ax.set_title("Learing Rate")
+    ax.set_title("Learning Rate")
+    ax.set_yscale('log')
 
+    if not lr is None:
+        pass
 
     return fig, axis
 
@@ -428,8 +576,7 @@ def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, 
             mses.append(mse)
             psnrs.append(psnr)
 
-        print("[Vaild] epoch: {}, mse:  {:.6f}".format(epoch, np.mean(mses)))
-        print("[Vaild] epoch: {}, psnr: {:.4f}".format(epoch, np.mean(psnr)))
+        print("[Vaild] Epoch: {}, MSE: {:.6f}, PSNR: {:.4f}".format(epoch, np.mean(mses), np.mean(psnr)))
 
     return np.mean(mses), np.mean(psnrs)
 

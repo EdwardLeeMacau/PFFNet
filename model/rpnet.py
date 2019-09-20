@@ -60,19 +60,19 @@ class Net(nn.Module):
         res16x = torch.add(res_dehaze, res16x)
 
         res16x = self.relu(self.convd16x(res16x))
-        res16x = F.upsample(res16x, res8x.size()[2:], mode='bilinear')
+        res16x = F.interpolate(res16x, res8x.size()[2:], mode='bilinear', align_corners=True)
         res8x = torch.add(res16x, res8x)
 
         res8x = self.relu(self.convd8x(res8x))
-        res8x = F.upsample(res8x, res4x.size()[2:], mode='bilinear')
+        res8x = F.interpolate(res8x, res4x.size()[2:], mode='bilinear', align_corners=True)
         res4x = torch.add(res8x, res4x)
 
         res4x = self.relu(self.convd4x(res4x))
-        res4x = F.upsample(res4x, res2x.size()[2:], mode='bilinear')
+        res4x = F.interpolate(res4x, res2x.size()[2:], mode='bilinear', align_corners=True)
         res2x = torch.add(res4x, res2x)
 
         res2x = self.relu(self.convd2x(res2x))
-        res2x = F.upsample(res2x, x.size()[2:], mode='bilinear')
+        res2x = F.interpolate(res2x, x.size()[2:], mode='bilinear', align_corners=True)
         x = torch.add(res2x, x)
 
         x = self.conv_output(x)

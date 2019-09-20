@@ -15,11 +15,10 @@ from PIL import Image
 import torch.nn as nn
 from torchvision import transforms
 
-import psnr_ssim.val
 from model.rpnet import Net
-from psnr_ssim import val
+from psnr_ssim import val as validate
 
-device = 'cpu'
+device = utils.selectDevice()
 mean = torch.Tensor([0.485, 0.456, 0.406]).to(device)
 std  = torch.Tensor([0.229, 0.224, 0.225]).to(device)
 
@@ -48,7 +47,6 @@ def predict(opt):
     else:
         transform = transforms.ToTensor()
 
-    print("==========> DeHazing, Target: {}".format(len(images)))
     for im_path in images:
         filename = im_path.split('/')[-1]
         im = Image.open(im_path)
@@ -61,7 +59,6 @@ def predict(opt):
         with torch.no_grad():
             im_dehaze = net(im)
 
-            # Shift the value to [0, 1]
             if opt.normalize:
                 im_dehaze = im_dehaze * std[:, None, None] + mean[:, None, None]
         
@@ -81,32 +78,38 @@ def main(opt):
     if not os.path.exists(opt.checkpoint):
         raise FileNotFoundError("File doesn't exists: {}".format(opt.checkpoint))
 
+    if opt.cuda and torch.cuda.is_available():
+        device = utils.selectDevice()
+
     tag = os.path.basename(os.path.dirname(opt.checkpoint))
-    num_checkpoint = os.path.basename(opt.checkpoint).split('.')[0]
-    opt.dehazy     = os.path.join(opt.dehazy, tag, num_checkpoint)
+    checkpoint = os.path.basename(opt.checkpoint).split('.')[0]
+    opt.dehazy = os.path.join(opt.dehazy, tag, checkpoint)
 
     utils.details(opt, None)
 
     # Generate the images
     predict(opt)
 
-    # Vaildate the performance on the test set
+    # Inference the performance on the validation set
+    pass
+
+    # Inference the performance on the test set
     gts = sorted(utils.load_all_image(opt.gt))
     dehazes = sorted(utils.load_all_image(opt.dehazy))
-    psnr_ssim.val(dehazes, gts, opt.record)
+    validate(dehazes, gts, opt.dehazy)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
     parser.add_argument("--rb", default=18, type=int, help="number of residual blocks")
     parser.add_argument("--checkpoint", type=str, help="root of model checkpoint")
-    parser.add_argument("--hazy", default="./dataset/NTIRE2018_RAW/Hazy", type=str, help="path to load test images")
+    parser.add_argument("--hazy", default="./dataset/NTIRE2018_TEST/Hazy", type=str, help="path to load test images")
     parser.add_argument("--cuda", default=False, action='store_true', help="Use cuda?")
-    parser.add_argument("--gpus", default=8, type=int, help="nums of gpu to use")
-    parser.add_argument("--dehazy", default="./Output", type=str, help="path to save output images")
-    parser.add_argument("--record", default="./psnr_ssim.txt", type=str, help="wrote the result to the textfile")
-    parser.add_argument("--gt", default="./dataset/NTIRE2018_RAW/GT", type=str, help="path to load gt images")
+    # parser.add_argument("--gpus", default=8, type=int, help="nums of gpu to use")
+    parser.add_argument("--dehazy", default="./output", type=str, help="path to save output images")
+    # parser.add_argument("--record", default="record.txt", type=str, help="wrote the result to the textfile")
+    parser.add_argument("--gt", default="./dataset/NTIRE2018_TEST/GT", type=str, help="path to load gt images")
     parser.add_argument("--normalize", default=False, action="store_true", help="pre / post normalization of the images")
-    parser.add_argument("--activation", default="LeakyReLU", help="the activation of the model")
+    # parser.add_argument("--activation", default="LeakyReLU", help="the activation of the model")
 
     opt = parser.parse_args()
     

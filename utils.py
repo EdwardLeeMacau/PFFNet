@@ -14,10 +14,7 @@ std = torch.Tensor([0.229, 0.224, 0.225])
 
 def selectDevice():
     """ Return the device available in computer """
-    use_cuda = torch.cuda.is_available()
-    device = torch.device("cuda" if use_cuda else "cpu")
-
-    return device
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def weights_init_kaiming(m):
     """ 
@@ -102,13 +99,17 @@ def get_mean_and_std(dataset: torch.utils.data.Dataset):
 
 def saveCheckpoint(checkpoint_path, model: nn.Module, optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.MultiStepLR, epoch, iteration):
     """
-      Params:
-      - checkpoint_path: the directory of the model parameter
-      - model: the neural network to save
-      - optimizer
-      - scheduler
+    Parameters
+    ----------
+    checkpoint_path : 
+        the directory of the model parameter
 
-      Return: model, optimizer, resume_epoch, resume_iteration, scheduler
+    model, optimizer, scheduler : 
+        the neural network to save
+
+    Return
+    ------
+    model, optimizer, resume_epoch, resume_iteration, scheduler
     """
     # state_dict = model.module.state_dict()
     # for key in state_dict.keys():
@@ -128,13 +129,17 @@ def saveCheckpoint(checkpoint_path, model: nn.Module, optimizer: optim.Optimizer
 
 def loadCheckpoint(checkpoint_path: str, model: nn.Module, optimizer: optim, scheduler: optim.lr_scheduler.MultiStepLR):
     """
-      Params:
-      - checkpoint_path: the directory of the model parameter
-      - model: the neural network to save
-      - optimizer
-      - scheduler
+    Parameters
+    ----------
+    checkpoint_path :
+        the directory of the model parameter
 
-      Return: model, optimizer, resume_epoch, resume_iteration, scheduler
+    model, optimizer, scheduler : 
+        the neural network to save
+
+    Return
+    ------
+    model, optimizer, resume_epoch, resume_iteration, scheduler
     """
     state = torch.load(checkpoint_path)
 
@@ -177,6 +182,11 @@ def loadModel(checkpoint_path: str, model: nn.Module, dataparallel=False):
     
     dataparallel : 
         If true, the key of the state_dict will have a 'module' prefix, remove it. 
+    
+    Return
+    ------
+    model : torch.nn.Module
+        Neural networks loaded parameters
     """
     state = torch.load(checkpoint_path)
     
@@ -234,4 +244,15 @@ def details(opt, path=None):
     for item, values in vars(opt).items():
         print("{:16} {}".format(item, values))
             
+    return
+
+def readArgs(fname):
+    """
+    Read the arguments written in textfile.
+
+    Parameters
+    ----------
+    fname : str
+        the directory of the text file
+    """
     return
