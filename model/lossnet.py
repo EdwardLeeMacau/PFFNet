@@ -1,3 +1,9 @@
+"""
+   FileName     [ lossnet.py ]
+   PackageName  [ PFFNet ]
+   Synopsis     [ Perceptual Loss implementation ]
+"""
+
 import torch
 import torch.nn as nn
 import torchvision
@@ -5,9 +11,21 @@ import torchvision.models as models
 
 from collections import namedtuple
 
-VGG16_LossOutput = namedtuple("VGG16Output", ["relu1_2", "relu2_2", "relu3_3", "relu4_3"])
-VGG19_LossOutput = namedtuple("VGG19Output", ["relu1_2", "relu2_2", "relu3_4", "relu4_4"])
+# VGG16_LossOutput = namedtuple("VGG16Output", ["relu1_2", "relu2_2", "relu3_3", "relu4_3"])
+# VGG19_LossOutput = namedtuple("VGG19Output", ["relu1_2", "relu2_2", "relu3_4", "relu4_4"])
 
+VGG11_Layer = {
+    '1': "relu1_1", '4': "relu2_1", '9': "relu3_2", '14': "relu4_2"
+}
+VGG11_bn_Layer = {
+    '2': "relu1_1", '6': "relu2_1", '13': "relu3_2", '20': "relu4_2"
+}
+VGG13_Layer = {
+    '3': "relu1_2", '8': "relu2_2", '13': "relu3_2", '18': "relu4_2"
+}
+VGG13_bn_Layer = {
+    '5': "relu1_2", '12': "relu2_2", '19': "relu3_2", '26': "relu4_2"
+}
 VGG16_Layer = {
     '3': "relu1_2", '8': "relu2_2", '15': "relu3_3", '22': "relu4_3"
 }
@@ -52,6 +70,15 @@ class LossNetwork(nn.Module):
         return loss
 
 def main():
+    """ Load parameters (download if don't exists), vaildate class *LossNetwork* works well """
+    # Reference: None
+    vgg11 = models.vgg11(pretrained=True)
+    vgg11_bn = models.vgg11_bn(pretrained=True)
+
+    # Reference: None
+    vgg13 = models.vgg13(pretrained=True)
+    vgg13_bn = models.vgg13_bn(pretrained=True)
+
     # Paper: Perceptual Losses for Real-Time Style Transfer and Super-Resolution
     vgg16 = models.vgg16(pretrained=True)
     vgg16_bn = models.vgg16_bn(pretrained=True)

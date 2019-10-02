@@ -55,8 +55,21 @@ std  = torch.Tensor([0.229, 0.224, 0.225]).to(device)
 #   std  = [0.229, 0.224, 0.225]                                    #
 # ----------------------------------------------------------------- #
 
+def initialize_perceptual_loss():
+    return
+
+def initialize_dataset():
+    return
+
 def main(opt):
-    """ Main process of train.py """
+    """ 
+    Main process of train.py 
+
+    Parameters
+    ----------
+    opt : namespace
+        The option (hyperparameters) of these model
+    """
     if opt.fixrandomseed:
         seed = 1334
         torch.manual_seed(seed)
@@ -78,10 +91,10 @@ def main(opt):
     train_loader  = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchsize, pin_memory=True, shuffle=True)
     val_loader    = DataLoader(dataset=val_dataset, num_workers=opt.threads, batch_size=opt.batchsize, pin_memory=True, shuffle=True)
     
-    # ------------------------------------------------------------------------------ #
-    # Notes: 20190515                                                                #
-    #   The original model doesn't set any activation function in the output layer.  #
-    # ------------------------------------------------------------------------------ #
+    # ------------------------------------------------------------------------ #
+    # Notes: 20190515                                                          #
+    #   The model doesn't set any activation function in the output layer.     #
+    # ------------------------------------------------------------------------ #
     print("==========> Building model")
     model = Net(opt.rb)
     
@@ -94,33 +107,55 @@ def main(opt):
     # ------------------------------- #
     # Option: Perceptual loss         #
     # ------------------------------- #
+
     if opt.perceptual == 'vgg16':
         print("==========> Using VGG16 as Perceptual Loss Model")
-        perceptual = LossNetwork(torchvision.models.vgg16(pretrained=True), lossnet.VGG16_Layer)
+        perceptual = LossNetwork(
+            torchvision.models.vgg16(pretrained=True), 
+            lossnet.VGG16_Layer
+        )
 
     if opt.perceptual == 'vgg16_bn':
         print("==========> Using VGG16 with Batch Normalization as Perceptual Loss Model")
-        perceptual = LossNetwork(torchvision.models.vgg16_bn(pretrained=True), lossnet.VGG16_bn_Layer)
+        perceptual = LossNetwork(
+            torchvision.models.vgg16_bn(pretrained=True), 
+            lossnet.VGG16_bn_Layer
+        )
 
     if opt.perceptual == 'vgg19':
         print("==========> Using VGG19 as Perceptual Loss Model")
-        perceptual = LossNetwork(torchvision.models.vgg19(pretrained=True), lossnet.VGG19_Layer)
+        perceptual = LossNetwork(
+            torchvision.models.vgg19(pretrained=True),
+            lossnet.VGG19_Layer
+        )
 
     if opt.perceptual == 'vgg19_bn':
         print("==========> Using VGG19 with Batch Normalization as Perceptual Loss Model")
-        perceptual = LossNetwork(torchvision.models.vgg19_bn(pretrained=True), lossnet.VGG19_bn_Layer)
+        perceptual = LossNetwork(
+            torchvision.models.vgg19_bn(pretrained=True),
+            lossnet.VGG19_bn_Layer
+        )
 
     if opt.perceptual == "resnet18":
         print("==========> Using Resnet18 as Perceptual Loss Model")
-        perceptual = LossNetwork(torchvision.models.resnet18(pretrained=True), lossnet.Resnet18_Layer)
+        perceptual = LossNetwork(
+            torchvision.models.resnet18(pretrained=True),
+            lossnet.Resnet18_Layer
+        )
 
     if opt.perceptual == "resnet34":
         print("==========> Using Resnet34 as Perceptual Loss Model")
-        perceptual = LossNetwork(torchvision.models.resnet34(pretrained=True), lossnet.Resnet34_Layer)
+        perceptual = LossNetwork(
+            torchvision.models.resnet34(pretrained=True),
+            lossnet.Resnet34_Layer
+        )
 
     if opt.perceptual == "resnet50":
         print("==========> Using Resnet50 as Perceptual Loss Model")
-        perceptual = LossNetwork(torchvision.models.resnet50(pertrained=True), lossnet.Resnet50_Layer)
+        perceptual = LossNetwork(
+            torchvision.models.resnet50(pertrained=True),
+            lossnet.Resnet50_Layer
+        )
 
     if not perceptual is None:
         perceptual.eval()
@@ -234,6 +269,7 @@ def main(opt):
     psnr_iter  = np.empty(0, dtype=float)
     ssim_iter  = np.empty(0, dtype=float)
     mse_iter   = np.empty(0, dtype=float)
+    lr_iter    = np.empty(0, dtype=float)
     iterations = np.empty(0, dtype=float)
 
     # Show training settings 
@@ -277,18 +313,18 @@ def main(opt):
     # ------------------------ #
     print("==========> Training")
     for epoch in range(opt.starts, opt.epochs + 1):
-        loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, iterations, fig, ax = train_val(
+        loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, iterations, fig, ax = train_val(
             model, optimizer, criterion, perceptual, train_loader, val_loader, scheduler, 
-            epoch, loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, iterations, opt, name, fig, axis
+            epoch, loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, iterations, opt, name, fig, axis
         )
 
         scheduler.step()
 
     return
 
-def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module, perceptual: LossNetwork, train_loader: DataLoader, val_loader: DataLoader, scheduler: optim.lr_scheduler.MultiStepLR, epoch: int, loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, iters, opt, name, fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes):
+def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module, perceptual: LossNetwork, train_loader: DataLoader, val_loader: DataLoader, scheduler: optim.lr_scheduler.MultiStepLR, epoch: int, loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, iters, opt, name, fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes):
     """
-    Main of training and vaildation
+    Main function of training and vaildation
 
     Parameters
     ----------
@@ -385,6 +421,7 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
             loss_iter = np.append(loss_iter, np.array([np.mean(trainloss)]), axis=0)
             mse_iter  = np.append(mse_iter, np.array([mse]), axis=0)
             psnr_iter = np.append(psnr_iter, np.array([psnr]), axis=0)
+            lr_iter   = np.append(lr_iter, np.array([optimizer.param_groups[0]["lr"]]), axis=0)
             iters     = np.append(iters, np.array([steps / len(train_loader)]), axis=0)
 
             if not perceptual is None:
@@ -403,15 +440,10 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
                 'ValidationPSNR':  psnr_iter
             })
 
-            # Maximum Message
-            # if df.shape[0] > 5:
-            df = df.append(df.nlargest(5, 'ValidationPSNR'))#.set_index(pd.Index([ "Top{}".format(i) for i in range(1, 6) ])))
+            # Loss (Training Curve) Message
+            df = df.nlargest(5, 'ValidationPSNR').append(df)
 
             df.to_excel(os.path.join(opt.detail, name, "statistical.xlsx"))
-
-            # with open(os.path.join(opt.detail, name, "statistics.txt"), "w") as textfile:
-            #     datas = [ str(data.tolist()) for data in (loss_iter, mse_iter, psnr_iter, ssim_iter, iters) ]
-            #     textfile.write("\n".join(datas))
 
             # Show images in grid with validation set
             # pass
@@ -424,7 +456,7 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
                 psnr_iter, 
                 ssim_iter, 
                 iters, 
-                optimizer.param_groups[0]["lr"], 
+                lr_iter, 
                 epoch, len(train_loader), 
                 fig, ax
             )
@@ -432,9 +464,9 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
             plt.tight_layout()
             plt.savefig(os.path.join(opt.detail, name, "loss.png"))
 
-    return loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, iters, fig, ax
+    return loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, iters, fig, ax
 
-def training_curve(train_loss, perc_iter, val_loss, psnr, ssim, x, lr, epoch, iters_per_epoch, fig: matplotlib.figure.Figure, axis: matplotlib.axes.Axes):
+def training_curve(train_loss, perc_iter, val_loss, psnr, ssim, x, lr, epoch, iters_per_epoch, fig: matplotlib.figure.Figure, axis: matplotlib.axes.Axes, linewidth=0.25):
     """
     Plot out learning rate, training loss, validation loss and PSNR.
 
@@ -449,6 +481,9 @@ def training_curve(train_loss, perc_iter, val_loss, psnr, ssim, x, lr, epoch, it
     fig, axis : matplotlib.figure.Figure, matplotlib.axes.Axes
         Matplotlib plotting object.
 
+    linewidth : float
+        Default linewidth
+
     Return
     ------
     fig, axis : matplotlib.figure.Figure, matplotlib.axes.Axes
@@ -456,10 +491,9 @@ def training_curve(train_loss, perc_iter, val_loss, psnr, ssim, x, lr, epoch, it
     """
     # Linear scale of loss curve
     ax = axis[0]
-    lines = []
-    line1, = ax.plot(x, val_loss, label="ValLoss", color='red', linewidth=0.5)
-    line2, = ax.plot(x, train_loss, label="TrainLoss", color='blue', linewidth=0.5)
-    line3, = ax.plot(x, np.repeat(np.amin(val_loss), len(x)), linestyle=':', linewidth=0.5)
+    line1, = ax.plot(x, val_loss, label="Validation Loss", color='red', linewidth=linewidth)
+    line2, = ax.plot(x, train_loss, label="Train Loss", color='blue', linewidth=linewidth)
+    ax.plot(x, np.repeat(np.amin(val_loss), len(x)), linestyle=':', linewidth=linewidth)
     # ax.text(x, y, "{}: {}".format(x, y))
     ax.set_xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
     ax.set_ylabel("Image Loss")
@@ -467,44 +501,44 @@ def training_curve(train_loss, perc_iter, val_loss, psnr, ssim, x, lr, epoch, it
 
     if perc_iter is not None:
         ax = axis[4]
-        line4, = ax.plot(x, perc_iter, label="PerceptualLoss", color='green', linewidth=0.5)
+        line4, = ax.plot(x, perc_iter, label="Perceptual Loss", color='green', linewidth=linewidth)
         ax.set_ylabel("Perceptual Loss")
 
     ax.legend(handles=(line1, line2, line4, ))
     
     # Log scale of loss curve
     ax = axis[1]
-    ax.plot(x, train_loss, label="TrainLoss", color='blue', linewidth=0.5)
-    ax.plot(x, val_loss, label="ValLoss", color='red', linewidth=0.5)
-    ax.plot(x, np.repeat(np.amin(val_loss), len(x)), linestyle=':', linewidth=0.5)
+    ax.plot(x, train_loss, label="Train Loss", color='blue', linewidth=linewidth)
+    ax.plot(x, val_loss, label="Validation Loss", color='red', linewidth=linewidth)
+    ax.plot(x, np.repeat(np.amin(val_loss), len(x)), linestyle=':', linewidth=linewidth)
     ax.set_xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
     ax.set_yscale('log')
     ax.set_title("Loss(Log scale)")
 
     if perc_iter is not None:
         ax = axis[5]
-        ax.plot(x, perc_iter, label="PerceptualLoss", color='green', linewidth=0.5)
+        ax.plot(x, perc_iter, label="Perceptual Loss", color='green', linewidth=linewidth)
         ax.set_ylabel("Perceptual Loss")
 
     # Linear scale of PSNR, SSIM
     ax = axis[2]
-    line1, = ax.plot(x, psnr, label="PSNR", color='b', linewidth=0.5)
-    line2, = ax.plot(x, np.repeat(np.amax(psnr), len(x)), linestyle=':', linewidth=0.5)
+    line1, = ax.plot(x, psnr, label="PSNR", color='blue', linewidth=linewidth)
+    line2, = ax.plot(x, np.repeat(np.amax(psnr), len(x)), linestyle=':', linewidth=linewidth)
     ax.set_xlabel("Epochs(s) / Iteration: {}".format(iters_per_epoch))
     ax.set_ylabel("Average PSNR")
-    ax.set_title("Validatio Performance")
+    ax.set_title("Validation Performance")
 
     ax.legend(handles=(line1, ))
 
     # Learning Rate Curve
     ax = axis[3]
+    line1, = ax.plot(x, lr, label="Learning Rate", color='cyan', linewidth=linewidth)
     ax.set_xlabel("Epochs(s) / Iteration: {}".format(iters_per_epoch))
     ax.set_title("Learning Rate")
     ax.set_yscale('log')
 
-    if not lr is None:
-        pass
-
+    ax.legend(handles=(line1, ))
+        
     return fig, axis
 
 def grid_show(model: nn.Module, loader: DataLoader, folder, nrow=8, normalize=False):
@@ -576,7 +610,7 @@ def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, 
             mses.append(mse)
             psnrs.append(psnr)
 
-        print("[Vaild] Epoch: {}, MSE: {:.6f}, PSNR: {:.4f}".format(epoch, np.mean(mses), np.mean(psnr)))
+        print("[Vaild] Epoch: {}, MSE: {:.6f}, PSNR: {:.4f}".format(epoch, np.mean(mses), np.mean(psnrs)))
 
     return np.mean(mses), np.mean(psnrs)
 
@@ -592,7 +626,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", default=100, type=int, help="number of epochs to train for")
     parser.add_argument("--lr", default=1e-4, type=float, help="Learning Rate. Default=1e-4")
     parser.add_argument("--perceptual", type=str, help="Perceptual loss model selection")
-    parser.add_argument("--perceptual_weight", default=1e-6, type=float, help="Weight of perceptual loss")
+    parser.add_argument("--perceptual_weight", type=float, help="Weight of perceptual loss")
     # parser.add_argument("--activation", default="LeakyReLU", type=str, help="the activation function use at training")
     parser.add_argument("--normalize", action="store_true", help="normalized the dataset images")
     parser.add_argument("--milestones", default=[20, 40], type=int, nargs='*', help="Which epoch to decay the learning rate")
@@ -622,8 +656,8 @@ if __name__ == "__main__":
     parser.add_argument("--resume", type=str, help="Path to checkpoint.")
 
     # Dataloader setting
-    parser.add_argument("--train", default="./dataset/NTIRE2018", type=str, help="path of training dataset")
-    parser.add_argument("--val", default="./dataset/NTIRE2018_VAL", type=str, help="path of validation dataset")
+    parser.add_argument("--train", default=["./dataset/NTIRE2018"], type=str, nargs='+', help="path of training dataset")
+    parser.add_argument("--val", default=["./dataset/NTIRE2018_VAL"], type=str, nargs='+', help="path of validation dataset")
 
     opt = parser.parse_args()
 
@@ -640,8 +674,13 @@ if __name__ == "__main__":
     if opt.pretrained and (not os.path.isfile(opt.pretrained)):
         raise ValueError("{} doesn't not exists".format(opt.pretrained))
 
-    # Check data directory
-    for path in (opt.train, opt.val):
+    # Check training dataset directory
+    for path in opt.train:
+        if not os.path.exists(path): 
+            raise ValueError("{} doesn't exist".format(path))
+
+    # Check validation dataset directory
+    for path in opt.val:
         if not os.path.exists(path):
             raise ValueError("{} doesn't exist".format(path))
 
