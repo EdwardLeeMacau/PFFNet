@@ -25,6 +25,8 @@ from torchvision.transforms import (
     CenterCrop, Compose, Normalize, RandomCrop, Resize, ToTensor)
 from torchvision.utils import make_grid
 
+import cmdparser
+import graphs
 import utils
 from model import lossnet
 from data import DatasetFromFolder
@@ -61,64 +63,141 @@ def initialize_perceptual_loss():
 def initialize_dataset():
     return
 
-def main(opt):
-    """ 
-    Main process of train.py 
+def getDataset(opt, transform):
+    """ Return the dataloader object """
+    train_dataset = DatasetFromFolder(opt.train, transform=transform)
+    val_dataset   = DatasetFromFolder(opt.val, transform=transform)
+    train_loader  = DataLoader(
+        dataset=train_dataset, 
+        num_workers=opt.threads, 
+        batch_size=opt.batchsize, 
+        pin_memory=True, 
+        shuffle=True
+    )
+    val_loader    = DataLoader(
+        dataset=val_dataset, 
+        num_workers=opt.threads, 
+        batch_size=opt.batchsize, 
+        pin_memory=True, 
+        shuffle=True
+    )
 
-    Parameters
-    ----------
-    opt : namespace
-        The option (hyperparameters) of these model
-    """
-    if opt.fixrandomseed:
-        seed = 1334
-        torch.manual_seed(seed)
-        
-        if opt.cuda: 
-            torch.cuda.manual_seed(seed)
+    return train_loader, val_loader
 
-    print("==========> Loading datasets")
-    if opt.normalize:
-        img_transform = Compose([
-            ToTensor(),
-            Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+def getOptimizer(model, opt):
+    """ Return the optimizer and schedular """
+    if opt.optimizer == "Adam":
+        optimizer = optim.Adam(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=opt.lr,
+            weight_decay=opt.weight_decay
+        )
+    elif opt.optimizer == "SGD":
+        optimizer = optim.SGD(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=opt.lr,
+            weight_decay=opt.weight_decay
+        )
+    elif opt.optimizer == "ASGD":
+        optimizer = optim.ASGD(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=opt.lr,
+            lambd=1e-4,
+            alpha=0.75,
+            t0=1000000.0,
+            weight_decay=opt.weight_decay
+        )
+    elif opt.optimizer == "Adadelta":
+        optimizer = optim.Adadelta(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=opt.lr,
+            rho=0.9,
+            eps=1e-06,
+            weight_decay=opt.weight_decay
+        )
+    elif opt.optimizer == "Adagrad":
+        optimizer = optim.Adagrad(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=opt.lr,
+            lr_decay=0,
+            weight_decay=opt.weight_decay,
+            initial_accumulator_value=0
+        )
+    elif opt.optimizer == "Adam":
+        optimizer = optim.Adam(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=opt.lr,
+            weight_decay=opt.weight_decay
+        )
+    elif opt.optimizer == "SGD":
+        optimizer = optim.SGD(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=opt.lr,
+            weight_decay=opt.weight_decay
+        )
+    elif opt.optimizer == "ASGD":
+        optimizer = optim.ASGD(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=opt.lr,
+            lambd=1e-4,
+            alpha=0.75,
+            t0=1000000.0,
+            weight_decay=opt.weight_decay
+        )
+    elif opt.optimizer == "Adadelta":
+        optimizer = optim.Adadelta(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=opt.lr,
+            rho=0.9,
+            eps=1e-06,
+            weight_decay=opt.weight_decay
+        )
+    elif opt.optimizer == "Adagrad":
+        optimizer = optim.Adagrad(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=opt.lr,
+            lr_decay=0,
+            weight_decay=opt.weight_decay,
+            initial_accumulator_value=0
+        )
+    elif opt.optimizer == "SparseAdam":
+        optimizer = optim.SparseAdam(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=opt.lr,
+            betas=(opt.b1, opt.b2),
+            eps=1e-08
+        )
+    elif opt.optimizer == "Adamax":
+        optimizer = optim.Adamax(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=opt.lr,
+            betas=(opt.b1, opt.b2),
+            eps=1e-08,
+            weight_decay=opt.weight_dacay
+        )
     else:
-        img_transform = ToTensor()
+        raise ValueError(opt.optimizer, "doesn't exist.")
 
-    train_dataset = DatasetFromFolder(opt.train, transform=img_transform)
-    val_dataset   = DatasetFromFolder(opt.val, transform=img_transform)
-    train_loader  = DataLoader(dataset=train_dataset, num_workers=opt.threads, batch_size=opt.batchsize, pin_memory=True, shuffle=True)
-    val_loader    = DataLoader(dataset=val_dataset, num_workers=opt.threads, batch_size=opt.batchsize, pin_memory=True, shuffle=True)
-    
-    # ------------------------------------------------------------------------ #
-    # Notes: 20190515                                                          #
-    #   The model doesn't set any activation function in the output layer.     #
-    # ------------------------------------------------------------------------ #
-    print("==========> Building model")
-    model = Net(opt.rb)
-    
-    # ------------------------------- #
-    # Loss: L1 Norm / L2 Norm         #
-    # ------------------------------- #
-    criterion = nn.MSELoss(size_average=True)
+    return optimizer
+
+def getFigureSpec():
+    return
+
+def getPerceptualModel(model):
+    """ Return the Perceptual Model """
     perceptual = None
-
-    # ------------------------------- #
-    # Option: Perceptual loss         #
-    # ------------------------------- #
 
     if opt.perceptual == 'vgg16':
         print("==========> Using VGG16 as Perceptual Loss Model")
         perceptual = LossNetwork(
-            torchvision.models.vgg16(pretrained=True), 
+            torchvision.models.vgg16(pretrained=True),
             lossnet.VGG16_Layer
         )
 
     if opt.perceptual == 'vgg16_bn':
         print("==========> Using VGG16 with Batch Normalization as Perceptual Loss Model")
         perceptual = LossNetwork(
-            torchvision.models.vgg16_bn(pretrained=True), 
+            torchvision.models.vgg16_bn(pretrained=True),
             lossnet.VGG16_bn_Layer
         )
 
@@ -157,68 +236,62 @@ def main(opt):
             lossnet.Resnet50_Layer
         )
 
-    if not perceptual is None:
-        perceptual.eval()
+    return perceptual
+
+def main(opt):
+    """ 
+    Main process of train.py 
+
+    Parameters
+    ----------
+    opt : namespace
+        The option (hyperparameters) of these model
+    """
+    if opt.fixrandomseed:
+        seed = 1334
+        torch.manual_seed(seed)
+        
+        if opt.cuda: 
+            torch.cuda.manual_seed(seed)
+
+    print("==========> Loading datasets")
+    if opt.normalize:
+        img_transform = Compose([
+            ToTensor(),
+            Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+    else:
+        img_transform = ToTensor()
+
+    # ------------------------------- #
+    # Dataset                         #
+    # ------------------------------- #
+    train_loader, val_loader = getDataset(opt, img_transform)
+    
+    # ------------------------------------------------------------------------ #
+    # Notes: 20190515                                                          #
+    #   The model doesn't set any activation function in the output layer.     #
+    # ------------------------------------------------------------------------ #
+    print("==========> Building model")
+    model = Net(opt.rb)
+    
+    # ------------------------------- #
+    # Loss: L1 Norm / L2 Norm         #
+    # ------------------------------- #
+    criterion = nn.MSELoss(size_average=True)
+
+    # --------------------------------- #
+    # Loss: Perceptual Model (Optional) #
+    # --------------------------------- #
+    perceptual = None
+    if not opt.perceptual is None:
+        perceptual = getPerceptualModel(opt.perceptual).eval()
 
     # --------------------------------------- #
     # Optimizer and learning rate scheduler   #
     # --------------------------------------- #
     print("==========> Setting Optimizer: {}".format(opt.optimizer))
-    if opt.optimizer == "Adam":
-        optimizer = optim.Adam(
-            filter(lambda p: p.requires_grad, model.parameters()), 
-            lr=opt.lr, 
-            weight_decay=opt.weight_decay
-        )
-    elif opt.optimizer == "SGD":
-        optimizer = optim.SGD(
-            filter(lambda p: p.requires_grad, model.parameters()), 
-            lr=opt.lr, 
-            weight_decay=opt.weight_decay
-        )
-    elif opt.optimizer == "ASGD":
-        optimizer = optim.ASGD(
-            filter(lambda p: p.requires_grad, model.parameters()), 
-            lr=opt.lr, 
-            lambd=1e-4, 
-            alpha=0.75, 
-            t0=1000000.0, 
-            weight_decay=opt.weight_decay
-        )
-    elif opt.optimizer == "Adadelta":
-        optimizer = optim.Adadelta(
-            filter(lambda p: p.requires_grad, model.parameters()), 
-            lr=opt.lr, 
-            rho=0.9, 
-            eps=1e-06, 
-            weight_decay=opt.weight_decay
-        )
-    elif opt.optimizer == "Adagrad":
-        optimizer = optim.Adagrad(
-            filter(lambda p: p.requires_grad, model.parameters()), 
-            lr=opt.lr, 
-            lr_decay=0, 
-            weight_decay=opt.weight_decay, 
-            initial_accumulator_value=0
-        )
-    elif opt.optimizer == "SparseAdam":
-        optimizer = optim.SparseAdam(
-            filter(lambda p: p.requires_grad, model.parameters()), 
-            lr=opt.lr, 
-            betas=(opt.b1, opt.b2), 
-            eps=1e-08
-        )
-    elif opt.optimizer == "Adamax":
-        optimizer = optim.Adamax(
-            filter(lambda p: p.requires_grad, model.parameters()), 
-            lr=opt.lr, 
-            betas=(opt.b1, opt.b2), 
-            eps=1e-08, 
-            weight_decay=opt.weight_dacay
-        )
-    else:
-        raise argparse.ArgumentError
-
+    optimizer = getOptimizer(model, opt)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=opt.milestones, gamma=opt.gamma)
 
     # ----------------------------------------------- #
@@ -288,18 +361,14 @@ def main(opt):
     # Linear scale of Loss
     axis[0].set_ylabel("Image Loss")
     axis[0].set_title("Loss")
-
-    if not perceptual is None:
-        axis.append( axis[0].twinx() )
-        axis[4].set_ylabel("Perceptual Loss")
+    axis.append( axis[0].twinx() )
+    axis[4].set_ylabel("Perceptual Loss")
 
     # Log scale of Loss
     axis[1].set_yscale('log')
     axis[1].set_title("Loss(Log scale)")
-
-    if not perceptual is None:
-        axis.append( axis[0].twinx() )
-        axis[5].set_ylabel("Perceptual Loss")
+    axis.append( axis[1].twinx() )
+    axis[5].set_ylabel("Perceptual Loss")
 
     # Linear scale of PSNR, SSIM
     axis[2].set_title("Average PSNR")
@@ -424,6 +493,9 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
             lr_iter   = np.append(lr_iter, np.array([optimizer.param_groups[0]["lr"]]), axis=0)
             iters     = np.append(iters, np.array([steps / len(train_loader)]), axis=0)
 
+            if perceptual is None:
+                perc_iter = np.append(perc_iter, np.array([np.nan]), axis=0)
+
             if not perceptual is None:
                 perc_iter = np.append(perc_iter, np.array([np.mean(perceloss)]), axis=0)
 
@@ -446,7 +518,7 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
             df.to_excel(os.path.join(opt.detail, name, "statistical.xlsx"))
 
             # Show images in grid with validation set
-            # pass
+            # graphs.grid_show()
                 
             # Plot TrainLoss, ValidationLoss
             fig, ax = training_curve(
@@ -618,47 +690,7 @@ if __name__ == "__main__":
     # Clean up OS screen
     os.system('clear')
 
-    parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
-
-    # Basic Training settings
-    parser.add_argument("--rb", default=18, type=int, help="number of residual blocks")
-    parser.add_argument("--batchsize", default=16, type=int, help="training batch size")
-    parser.add_argument("--epochs", default=100, type=int, help="number of epochs to train for")
-    parser.add_argument("--lr", default=1e-4, type=float, help="Learning Rate. Default=1e-4")
-    parser.add_argument("--perceptual", type=str, help="Perceptual loss model selection")
-    parser.add_argument("--perceptual_weight", type=float, help="Weight of perceptual loss")
-    # parser.add_argument("--activation", default="LeakyReLU", type=str, help="the activation function use at training")
-    parser.add_argument("--normalize", action="store_true", help="normalized the dataset images")
-    parser.add_argument("--milestones", default=[20, 40], type=int, nargs='*', help="Which epoch to decay the learning rate")
-    parser.add_argument("--gamma", default=0.1, type=float, help="The ratio of decaying learning rate everytime")
-    parser.add_argument("--starts", default=1, type=int, help="Manual epoch number (useful on restarts)")
-    parser.add_argument("--momentum", default=0.9, type=float, help="SGD Momentum, Default: 0.9")
-    parser.add_argument("--pretrained", type=str, help="path to pretrained model (default: none)")
-    parser.add_argument("--weight_decay", default=0, type=float, help="The weight penalty in the training")
-    parser.add_argument("--optimizer", default="Adam", type=str, help="Choose the optimizer")
-
-    # Message logging, model saving setting
-    parser.add_argument("--tag", default="Indoor", type=str, help="tag for this training")
-    parser.add_argument("--checkpoints", default="./checkpoints", type=str, help="Path to save checkpoints")
-    parser.add_argument("--val_interval", default=1000, type=int,  help="step to test the model performance")
-    parser.add_argument("--log_interval", default=10, type=int, help="interval per iterations to log the message")
-    # parser.add_argument("--grad_interval", default=0, type=int, help="interval per iterations to draw the gradient")
-    parser.add_argument("--save_interval", default=1000, type=int, help="interval per iterations to save the model")
-    parser.add_argument("--detail", default="./log", type=str, help="the directory to save the training settings")
-
-    # Device setting
-    parser.add_argument("--cuda", default=True, action='store_true', help="Use cuda?")
-    parser.add_argument("--gpus", default=1, type=int, help="nums of gpu to use")
-    parser.add_argument("--threads", default=8, type=int, help="Number of threads for data loader to use.")
-    parser.add_argument("--fixrandomseed", default=False, help="train with fix random seed")
-
-    # Pretrain model setting
-    parser.add_argument("--resume", type=str, help="Path to checkpoint.")
-
-    # Dataloader setting
-    parser.add_argument("--train", default=["./dataset/NTIRE2018"], type=str, nargs='+', help="path of training dataset")
-    parser.add_argument("--val", default=["./dataset/NTIRE2018_VAL"], type=str, nargs='+', help="path of validation dataset")
-
+    parser = cmdparser.parser
     opt = parser.parse_args()
 
     # Check arguments

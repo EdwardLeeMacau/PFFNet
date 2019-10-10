@@ -12,10 +12,12 @@
 import torch
 import torch.nn as nn
 
-# --------------------------
-# Notes:
-#   PReLU: LeakyReLU with a learnable alpha value
-# --------------------------
+class MeanShift(nn.Module):
+    def __init__(self):
+        super(MeanShift, self).__init__()
+
+    def forward(self, x):
+        return x
 
 class ConvLayer(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride):
@@ -60,5 +62,29 @@ class ResidualBlock(torch.nn.Module):
         out = self.relu(self.conv1(x))
         out = self.conv2(out) * 0.1
         out = torch.add(out, residual)
+
+        return out
+
+class AggregatedRecurrentResidualDownBlock(torch.nn.Module):
+    def __init__(self, channels, activation=nn.PReLU()):
+        super(AggregatedRecurrentResidualDownBlock, self).__init__()
+
+        self.conv = ConvLayer(channels, channels, kernel_size=1, stride=1)
+        self.relu = activation
+
+    def forward(self, x):
+        out = self.relu(self.conv(x))
+
+        return out
+
+class AggregatedRecurrentResidualUpBlock(torch.nn.Module):
+    def __init__(self, channels, activation=nn.PReLU()):
+        super(AggregatedRecurrentResidualUpBlock, self).__init__()
+
+        self.conv = ConvLayer(channels, channels, kernel_size=1, stride=1)
+        self.relu = activation
+
+    def forward(self, x):
+        out = self.relu(self.conv(x))
 
         return out

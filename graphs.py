@@ -3,10 +3,14 @@
   PackageName  [ PFFNet ]
   Synopsis     [ Provide statistics function for Deep Learning. ]
 """
-import trochvision
+import torch
+import torch.nn as nn 
+import torchvision
 from matplotlib import pyplot as plt
+from torch.utils.data import DataLoader
 
 def draw_gradient():
+    """ Plot the gradient of the training process """
     # if opt.grad_interval:
         # (Deprecated)
         # if steps % opt.grad_interval == 0:
@@ -37,14 +41,24 @@ def draw_gradient():
 
 def grid_show(model: nn.Module, loader: DataLoader, folder, nrow=8, normalize=False):
     """
-      Params:
-      - model:
-      - loader:
-      - folder:
-      - nrow:
-      - normalize:
+    Grid show function
 
-      Return: None
+    Parameters
+    ----------
+    model : nn.Module
+        (...)
+
+    loader : DataLoader
+        (...)
+
+    folder : str
+        (...)
+
+    nrow : int
+        Default 8
+
+    normalize : bool
+        Default False
     """
     iterator    = iter(loader)
     data, label = next(iterator)
@@ -74,50 +88,5 @@ def draw_graphs(x, y, labels, titles, filenames, **kwargs):
     """
     if len(y) != len(labels):
         raise ValueError("The lengths of the labels should equal to the length of y.")
-
-    num_curves = len(labels)
-    for i in range(0, num_curves):
-        plt.clf()
-        
-        if 'figsize' in kwargs: 
-            plt.figure(figsize=figsize)
-        
-        plt.plot(x, y[i], label=label[i])
-
-        plt.legend(loc=0)
-        plt.title(titles[i])
-        plt.savefig(filenames[i])
-
-    # Linear scale of loss curve
-    plt.clf()
-    plt.figure(figsize=(12.8, 7.2))
-    plt.plot(x, train_loss, label="TrainLoss", color='b')
-    plt.plot(x, val_loss, label="ValLoss", color='r')
-    plt.plot(x, np.repeat(np.amin(val_loss), len(x)), ':')
-    plt.legend(loc=0)
-    plt.xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
-    plt.title("Loss vs Epochs")
-    plt.savefig(os.path.join(opt.detail, name, loss_filename))
-
-    # Log scale of loss curve
-    plt.clf()
-    plt.figure(figsize=(12.8, 7.2))
-    plt.plot(x, train_loss, label="TrainLoss", color='b')
-    plt.plot(x, val_loss, label="ValLoss", color='r')
-    plt.plot(x, np.repeat(np.amin(val_loss), len(x)), ':')
-    plt.legend(loc=0)
-    plt.xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
-    plt.yscale('log')
-    plt.title("Loss vs Epochs")
-    plt.savefig(os.path.join(opt.detail, name, loss_log_filename))
-
-    # Linear scale of PSNR, SSIM
-    plt.clf()
-    plt.figure(figsize=(12.8, 7.2))
-    
-    plt.plot(x, psnr, label="PSNR", color='b')
-    plt.plot(x, np.repeat(np.amax(psnr), len(x)), ':')
-    plt.xlabel("Epochs(s) / Iteration: {}".format(iters_per_epoch))
-    plt.title("PSNR vs Epochs")
 
     return
