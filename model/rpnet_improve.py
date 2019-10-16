@@ -7,7 +7,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from model.net import ConvLayer, UpsampleConvLayer, ResidualBlock
+from model.net import (
+    MeanShift, InverseMeanShift, ConvLayer, UpsampleConvLayer, ResidualBlock
+)
 
 class ImproveNet(nn.Module):
     def __init__(self, res_blocks=18, activation=nn.LeakyReLU(0.2)):
@@ -69,8 +71,17 @@ class ImproveNet(nn.Module):
         return x
 
 def dimension_testing():
-    model = ImproveNet().cuda()
-    x = torch.rand(size=(16, 3, 640, 640), dtype=torch.float32).cuda()
+    device = 'cpu'
+
+    model = nn.Sequential(
+        MeanShift([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]), 
+        ImproveNet(),
+        InverseMeanShift([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ).to(device)
+
+    print(model)
+
+    x = torch.rand(size=(16, 3, 640, 640), dtype=torch.float32).to(device)
     y = model(x)
 
     return

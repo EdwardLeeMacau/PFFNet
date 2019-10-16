@@ -12,31 +12,43 @@
 import torch
 import torch.nn as nn
 
-class MeanShift(nn.Module):
+class MeanShift(nn.Conv2d):
     """ 
-    Individual Module to Shift the batchSize
+    Individual Module to Shift the batch of Images
 
     Parameters
     ----------
-    mean : 1-D tensor
-    std : 1-D tensor
+    mean, std : 1-D tensor
+        (...)
     """
-    def __init__(self, mean, std, shape):
-        if shape not in (3, 4):
-            raise ValueError
+    def __init__(self, mean, std):
+        super(MeanShift, self).__init__(in_channels=3, out_channels=3, kernel_size=1)
 
-        super(MeanShift, self).__init__()
+        std = torch.Tensor(std)
 
-        self.mean  = torch.tensor(mean, dtype=torch.float32).cuda()
-        self.std   = torch.tensor(std, dtype=torch.float32).cuda()
-        self.shape = shape
+        self.weight.data = torch.eye(3).view(3, 3, 1, 1) / std.view(3, 1, 1, 1)
+        self.bias.data   = torch.Tensor(mean) / std
 
-    def forward(self, x):
-        if self.shape == 4:
-            return (x - self.mean[None, :, None, None]) / self.std[None, :, None, None]
+        self.requires_grad = False
 
-        if self.shape == 3:
-            return (x - self.mean[:, None, None]) / self.std[:, None, None]
+class InverseMeanShift(nn.Conv2d):
+    """
+    Individual Module to Shift the batch of Images
+
+    Parameters
+    ----------
+    mean, std : 1-D tensor
+        (...)
+    """
+    def __init__(self, mean, std):
+        super(InverseMeanShift, self).__init__(in_channels=3, out_channels=3, kernel_size=1)
+
+        std = torch.Tensor(std)
+
+        self.weight.data = torch.eye(3).view(3, 3, 1, 1) * std.view(3, 1, 1, 1)
+        self.bias.data   = torch.Tensor(mean)
+
+        self.requires_grad = False
 
 class ConvLayer(nn.Module):
     """ 
@@ -58,18 +70,8 @@ class ConvLayer(nn.Module):
 
         self.conv2d = nn.Sequential(*layers)
 
-        # self.reflection_pad = nn.ReflectionPad2d(kernel_size // 2)
-        # self.conv2d         = nn.Conv2d(in_channels, out_channels, kernel_size, stride)
-        # if norm_layer is not None:
-        #     self.batchnorm  = norm_layer(outchannels)
-
     def forward(self, x):
-        # out = self.reflection_pad(x)
-        # out = self.conv2d(out)
-        # return out
-
         return self.conv2d(x)
-
 
 class UpsampleConvLayer(torch.nn.Module):
     """
@@ -91,17 +93,7 @@ class UpsampleConvLayer(torch.nn.Module):
 
         self.convtranspose2d = nn.Sequential(*layers)
 
-        # self.reflection_pad = nn.ReflectionPad2d(kernal_size // 2)
-        # self.conv2d         = nn.ConvTranspose2d(in_channels, out_channels, kernel_size, stride=stride)
-
-        # if norm_layer is not None:
-        #     self.batchnorm  = norm_layer(outchannels)
-
     def forward(self, x):
-        # out = self.reflection_pad(x)
-        # out = self.conv2d(out)
-        # return out
-
         return self.convtranspose2d(x)
 
 class ResidualBlock(torch.nn.Module):

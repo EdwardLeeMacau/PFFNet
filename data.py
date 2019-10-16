@@ -6,13 +6,9 @@
 
 import os
 from collections.abc import Container
-# import time
-# from os.path import basename
 
 import torch.utils.data as data
-# import torchvision.transforms
 from PIL import Image
-# from torch.utils.data import DataLoader
 
 def is_image_file(filename):
     """ 
@@ -28,9 +24,7 @@ def is_image_file(filename):
     bool : bool
         True if **file** is an image.
     """
-    filename_lower = filename.lower()
-
-    return any(filename_lower.endswith(extension) for extension in ['.png', '.jpg', '.bmp', '.mat'])
+    return any(filename.lower().endswith(extension) for extension in ['.png', '.jpg', '.bmp', '.mat'])
 
 class DatasetFromFolder(data.Dataset):
     def __init__(self, image_dir, transform=None):
@@ -48,12 +42,14 @@ class DatasetFromFolder(data.Dataset):
         self.data_filenames  = []
         self.label_filenames = []
 
+        # Modify Parameters
         if isinstance(image_dir, str):
             image_dir = (image_dir, )
 
         if not isinstance(image_dir, Container):
             raise ValueError("Image Directory should be type 'str' or type 'Container'")
 
+        # Get File names
         for directory in image_dir:
             data_dir  = os.path.join(directory, "Hazy")
             label_dir = os.path.join(directory, "GT")

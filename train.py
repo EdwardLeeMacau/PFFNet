@@ -2,6 +2,9 @@
   FileName     [ train.py ]
   PackageName  [ PFFNet ]
   Synopsis     [ Train the model ]
+
+  Usage:
+  >>> python train.py --normalized --cuda
 """
 
 import argparse
@@ -39,31 +42,9 @@ from model.lossnet import LossNetwork
 device = utils.selectDevice()
 cudnn.benchmark = True
 
+# Normalization(Mean Shift)
 mean = torch.Tensor([0.485, 0.456, 0.406]).to(device)
 std  = torch.Tensor([0.229, 0.224, 0.225]).to(device)
-
-# ----------------------------------------------------------------- #
-# Normalization (mean shift)                                        #
-# ----------------------------------------------------------------- #
-# Normalization methods                                             #
-#   input = (input - mean[:, None, None]) / std[:, None, None]      #
-#                                                                   #
-# Reverse Operation:                                                #
-#   input = (input * std[:, None, None]) + mean[:, None, None]      #
-#                                                                   #
-# Source code:                                                      #
-#   tensor.sub_(mean[:, None, None]).div_(std[:, None, None])       #
-#                                                                   #
-# Pretrain network normalize parameters                             #
-#   mean = [0.485, 0.456, 0.406]                                    #
-#   std  = [0.229, 0.224, 0.225]                                    #
-# ----------------------------------------------------------------- #
-
-def initialize_perceptual_loss():
-    return
-
-def initialize_dataset():
-    return
 
 def getDataset(opt, transform):
     """ 
@@ -82,7 +63,7 @@ def getDataset(opt, transform):
     train_dataset = DatasetFromFolder(opt.train, transform=transform)
     val_dataset   = DatasetFromFolder(opt.val, transform=transform)
 
-    train_loader  = DataLoader(
+    train_loader = DataLoader(
         dataset=train_dataset, 
         num_workers=opt.threads, 
         batch_size=opt.batchsize, 
@@ -90,7 +71,7 @@ def getDataset(opt, transform):
         shuffle=True
     )
 
-    val_loader    = DataLoader(
+    val_loader = DataLoader(
         dataset=val_dataset, 
         num_workers=opt.threads, 
         batch_size=opt.batchsize, 
@@ -103,6 +84,10 @@ def getDataset(opt, transform):
 def getOptimizer(model, opt):
     """ 
     Return the optimizer (and schedular)
+
+    Parameters
+    ----------
+    opt : namespace
 
     Return
     ------
@@ -198,11 +183,19 @@ def getOptimizer(model, opt):
             weight_decay=opt.weight_dacay
         )
     else:
-        raise ValueError(opt.optimizer, "doesn't exist.")
+        raise ValueError(opt.optimizer, " doesn't exist.")
 
     return optimizer
 
 def getFigureSpec(iteration: int, perceptual: bool):
+    """
+    Get 2x2 Figure And Axis
+
+    Return
+    ------
+    fig, axis : matplotlib.figure.Figure, matplotlib.axes.Axes
+        The plotting instance.
+    """
     fig, grids = plt.figure(figsize=(19.2, 10.8)), gridspec.GridSpec(2, 2)
 
     axis = [ fig.add_subplot(gs) for gs in grids ] 
@@ -225,6 +218,7 @@ def getFigureSpec(iteration: int, perceptual: bool):
     axis[3].set_yscale('log')
     axis[3].set_title("Learning Rate")
 
+    # Add TwinScale for Perceptual Loss
     if perceptual:
         axis.append( axis[0].twinx() )
         axis[4].set_ylabel("Perceptual Loss")
@@ -311,6 +305,7 @@ def main(opt):
             torch.cuda.manual_seed(seed)
 
     print("==========> Loading datasets")
+    # TODO: Normalize Layer Handling
     if opt.normalize:
         img_transform = Compose([
             ToTensor(),
@@ -319,23 +314,20 @@ def main(opt):
     else:
         img_transform = ToTensor()
 
-    # ------------------------------- #
-    # Dataset                         #
-    # ------------------------------- #
+    # Dataset 
     train_loader, val_loader = getDataset(opt, img_transform)
-    
-    # ------------------------------------------------------------------------ #
-    # Notes: 20190515                                                          #
-    #   The model doesn't set any activation function in the output layer.     #
-    # ------------------------------------------------------------------------ #
+
+    # TODO
+    # Load Model
     print("==========> Building model")
     model = ImproveNet(opt.rb)
     
     # --------------------------------- #
     # Loss: L1 Norm / L2 Norm           #
     #   Perceptual Model (Optional)     # 
+    #   TODO Append Layer (Optional)    #
     # --------------------------------- #
-    criterion = nn.MSELoss(reduction='mean')
+    criterion  = nn.MSELoss(reduction='mean')
     perceptual = None
     if not opt.perceptual is None:
         perceptual = getPerceptualModel(opt.perceptual).eval()
@@ -397,10 +389,6 @@ def main(opt):
     mse_iter   = np.empty(0, dtype=float)
     lr_iter    = np.empty(0, dtype=float)
     iterations = np.empty(0, dtype=float)
-
-    # Show training settings 
-    # print("==========> Training setting")
-    # utils.details(opt, "./{}/{}/{}".format(opt.detail, name, "args.txt"))
 
     # -------------------------------------- #
     # Set plotter to plot the loss curves    #
@@ -681,9 +669,6 @@ def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, 
     psnrs, mses = [], []
     model.eval()
 
-    if normalize:
-        print("==========> Using Normalization to measure MSE.")
-
     with torch.no_grad():
         for index, (data, label) in enumerate(loader, 1):
             data, label = data.to(device), label.to(device)
@@ -711,6 +696,7 @@ if __name__ == "__main__":
     # Clean up OS screen
     os.system('clear')
 
+    # Cmd Parser
     parser = cmdparser.parser
     opt = parser.parse_args()
 
