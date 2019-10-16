@@ -20,6 +20,8 @@ from PIL import Image
 from scipy.misc import imsave
 from scipy.ndimage import rotate
 
+import utils
+
 def random_augments(sp):
     """ Random crop and rotate augmentation """
     print("Process %s" % sp)
@@ -169,9 +171,7 @@ if __name__ == "__main__":
     ohazeparser.add_argument('--output', help='Output directory', type=str,
                             default="/media/disk1/EdwardLee/OutdoorTrain")
 
-    args = parser.parse_args()
-    for item, values in vars(args).items():
-        print("{:16} {}".format(item, values))
+    utils.detail(opt)
 
     # --------------------------------------------------------- #
     # Check folders here, make the directories if don't exist.  #

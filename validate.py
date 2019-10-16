@@ -94,13 +94,13 @@ def val(dehazes, gts, output_path=None):
         df = pd.DataFrame(data={'psnr': psnrs, 'ssim': ssims}, index=index)
         
         # Text Format
-        np.savetxt(os.path.join(output_path, "record.txt"), nparray)
+        # np.savetxt(os.path.join(output_path, "record.txt"), nparray)
 
         # JSON Format
-        df.to_json(os.path.join(output_path, "record.json"), orient='index')
+        # df.to_json(os.path.join(output_path, "record.json"), orient='index')
 
         # Spreadsheet Format
-        df.transpose().to_excel(os.path.join(output_path, "record.xlsx"))
+        df.transpose().to_excel(output_path)
 
     return psnrs, ssims, index
     
@@ -112,8 +112,8 @@ def main():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch DeepDehazing")
-    parser.add_argument("--dehaze", type=str, help="path to load dehaze images")
-    parser.add_argument("--gt", type=str, default="./dataset/NTIRE2018_TEST/GT", help="path to load gt images")
+    parser.add_argument("--dehaze", type=str, required=True, help="path to load dehaze images")
+    parser.add_argument("--gt", type=str, required=True, default="./dataset/NTIRE2018_TEST/GT", help="path to load gt images")
     parser.add_argument("--output", type=str)
 
     opt = parser.parse_args()

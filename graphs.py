@@ -72,7 +72,10 @@ def grid_show(model: nn.Module, loader: DataLoader, folder, nrow=8, normalize=Fa
     images = torch.cat((data, output, label), axis=0)
     images = make_grid(images.data, nrow=nrow)
 
-    torchvision.utils.save_image(images, "{}/{}_{}.png".format(epoch, iteration))
+    torchvision.utils.save_image(
+        images, 
+        os.path.join(folder, "{}.png".format(iteration))
+    )
 
     return
 

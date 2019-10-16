@@ -6,6 +6,7 @@
 
 import argparse
 import os
+import shutil
 from datetime import date
 
 import matplotlib
@@ -31,6 +32,7 @@ import utils
 from model import lossnet
 from data import DatasetFromFolder
 from model.rpnet import Net
+from model.rpnet_improve import ImproveNet
 from model.lossnet import LossNetwork
 
 # Select Device
@@ -64,9 +66,22 @@ def initialize_dataset():
     return
 
 def getDataset(opt, transform):
-    """ Return the dataloader object """
+    """ 
+    Return the dataloader object 
+
+    Parameters
+    ----------
+    opt : namespace
+
+    transform : torchvision.transform
+
+    Return
+    ------
+    train_loader, val_loader : torch.utils.data.DataLoader
+    """
     train_dataset = DatasetFromFolder(opt.train, transform=transform)
     val_dataset   = DatasetFromFolder(opt.val, transform=transform)
+
     train_loader  = DataLoader(
         dataset=train_dataset, 
         num_workers=opt.threads, 
@@ -74,6 +89,7 @@ def getDataset(opt, transform):
         pin_memory=True, 
         shuffle=True
     )
+
     val_loader    = DataLoader(
         dataset=val_dataset, 
         num_workers=opt.threads, 
@@ -85,7 +101,13 @@ def getDataset(opt, transform):
     return train_loader, val_loader
 
 def getOptimizer(model, opt):
-    """ Return the optimizer and schedular """
+    """ 
+    Return the optimizer (and schedular)
+
+    Return
+    ------
+    optimizer : torch.optim
+    """
     if opt.optimizer == "Adam":
         optimizer = optim.Adam(
             filter(lambda p: p.requires_grad, model.parameters()),
@@ -180,11 +202,45 @@ def getOptimizer(model, opt):
 
     return optimizer
 
-def getFigureSpec():
-    return
+def getFigureSpec(iteration: int, perceptual: bool):
+    fig, grids = plt.figure(figsize=(19.2, 10.8)), gridspec.GridSpec(2, 2)
+
+    axis = [ fig.add_subplot(gs) for gs in grids ] 
+    for ax in axis:
+        ax.set_xlabel("Epoch(s) / Iteration: {}".format(iteration))
+
+    # Linear scale of Loss
+    axis[0].set_ylabel("Image Loss")
+    axis[0].set_title("Loss")
+
+    # Log scale of Loss
+    axis[1].set_yscale("log")
+    axis[1].set_ylabel("Image Loss")
+    axis[1].set_title("Loss (Log scale)")
+
+    # PSNR
+    axis[2].set_title("Average PSNR")
+
+    # Learning Rate 
+    axis[3].set_yscale('log')
+    axis[3].set_title("Learning Rate")
+
+    if perceptual:
+        axis.append( axis[0].twinx() )
+        axis[4].set_ylabel("Perceptual Loss")
+        axis.append( axis[1].twinx() )
+        axis[5].set_ylabel("Perceptual Loss")
+
+    return fig, axis
 
 def getPerceptualModel(model):
-    """ Return the Perceptual Model """
+    """ 
+    Return the Perceptual Model
+
+    Return
+    ------
+    perceptual : {nn.Module, None}
+    """
     perceptual = None
 
     if opt.perceptual == 'vgg16':
@@ -273,16 +329,13 @@ def main(opt):
     #   The model doesn't set any activation function in the output layer.     #
     # ------------------------------------------------------------------------ #
     print("==========> Building model")
-    model = Net(opt.rb)
+    model = ImproveNet(opt.rb)
     
-    # ------------------------------- #
-    # Loss: L1 Norm / L2 Norm         #
-    # ------------------------------- #
-    criterion = nn.MSELoss(size_average=True)
-
     # --------------------------------- #
-    # Loss: Perceptual Model (Optional) #
+    # Loss: L1 Norm / L2 Norm           #
+    #   Perceptual Model (Optional)     # 
     # --------------------------------- #
+    criterion = nn.MSELoss(reduction='mean')
     perceptual = None
     if not opt.perceptual is None:
         perceptual = getPerceptualModel(opt.perceptual).eval()
@@ -346,43 +399,21 @@ def main(opt):
     iterations = np.empty(0, dtype=float)
 
     # Show training settings 
-    print("==========> Training setting")
-    utils.details(opt, "./{}/{}/{}".format(opt.detail, name, "args.txt"))
+    # print("==========> Training setting")
+    # utils.details(opt, "./{}/{}/{}".format(opt.detail, name, "args.txt"))
 
     # -------------------------------------- #
     # Set plotter to plot the loss curves    #
     # -------------------------------------- #
-    fig, gs = plt.figure(figsize=(19.2, 10.8)), gridspec.GridSpec(2, 2)
-    
-    axis = [ fig.add_subplot(gs[i]) for i in range(4) ]
-    for ax in axis:
-        ax.set_xlabel("Epoch(s) / Iteration: {}".format(len(train_loader)))
-
-    # Linear scale of Loss
-    axis[0].set_ylabel("Image Loss")
-    axis[0].set_title("Loss")
-    axis.append( axis[0].twinx() )
-    axis[4].set_ylabel("Perceptual Loss")
-
-    # Log scale of Loss
-    axis[1].set_yscale('log')
-    axis[1].set_title("Loss(Log scale)")
-    axis.append( axis[1].twinx() )
-    axis[5].set_ylabel("Perceptual Loss")
-
-    # Linear scale of PSNR, SSIM
-    axis[2].set_title("Average PSNR")
-
-    # Learning Rate Curve
-    axis[3].set_title("Learning Rate")
-    axis[3].set_yscale('log')
+    twinx = (opt.perceptual is not None)
+    fig, axis = getFigureSpec(len(train_loader), twinx)
 
     # ------------------------ #
     # Start training           #
     # ------------------------ #
     print("==========> Training")
     for epoch in range(opt.starts, opt.epochs + 1):
-        loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, iterations, fig, ax = train_val(
+        loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, iterations, _, _ = train_val(
             model, optimizer, criterion, perceptual, train_loader, val_loader, scheduler, 
             epoch, loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, iterations, opt, name, fig, axis
         )
@@ -465,18 +496,19 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
         # ----------------------------------------------------- #
         # 1. Print the training message
         if steps % opt.log_interval == 0:
-            msg = "===> [Epoch {}] [{:4d}/{:4d}] ImgLoss: {:.6f}".format(epoch, iteration, len(train_loader), loss.item())
+            msg = "===> [Epoch {}] [{:4d}/{:4d}] ImgLoss: {:.6f}".format(
+                epoch, iteration, len(train_loader), loss.item()
+            )
         
             if not perceptual is None:
-                msg = "\t".join([msg, "PerceptualLoss: {:.6f}".format(perceptual_loss.item())])
+                msg = "\t".join([msg, "PerceptualLoss: {:.6f}".format(
+                    perceptual_loss.item())]
+                )
 
             print(msg)
 
-        # 2. Plot the gradient of each layer 
-        # (Deprecated)
-        
-        # 2.1 Print the gradient statistic message for each layer
-        # (NotImplementedError)
+        # 2. Print the gradient statistic message for each layer
+        # graphs.draw_gradient()
 
         # 3. Save the model
         if steps % opt.save_interval == 0:
@@ -566,36 +598,43 @@ def training_curve(train_loss, perc_iter, val_loss, psnr, ssim, x, lr, epoch, it
     line1, = ax.plot(x, val_loss, label="Validation Loss", color='red', linewidth=linewidth)
     line2, = ax.plot(x, train_loss, label="Train Loss", color='blue', linewidth=linewidth)
     ax.plot(x, np.repeat(np.amin(val_loss), len(x)), linestyle=':', linewidth=linewidth)
-    # ax.text(x, y, "{}: {}".format(x, y))
     ax.set_xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
     ax.set_ylabel("Image Loss")
     ax.set_title("Loss")
 
-    if perc_iter is not None:
+    if not np.isnan(perc_iter).all():
         ax = axis[4]
         line4, = ax.plot(x, perc_iter, label="Perceptual Loss", color='green', linewidth=linewidth)
         ax.set_ylabel("Perceptual Loss")
 
-    ax.legend(handles=(line1, line2, line4, ))
-    
+    if not np.isnan(perc_iter).all():
+        ax.legend(handles=(line1, line2, line4, ))
+    else:
+        ax.legend(handles=(line1, line2, ))
+
     # Log scale of loss curve
     ax = axis[1]
-    ax.plot(x, train_loss, label="Train Loss", color='blue', linewidth=linewidth)
-    ax.plot(x, val_loss, label="Validation Loss", color='red', linewidth=linewidth)
+    line1, = ax.plot(x, val_loss, label="Validation Loss", color='red', linewidth=linewidth)
+    line2, = ax.plot(x, train_loss, label="Train Loss", color='blue', linewidth=linewidth)
     ax.plot(x, np.repeat(np.amin(val_loss), len(x)), linestyle=':', linewidth=linewidth)
     ax.set_xlabel("Epoch(s) / Iteration: {}".format(iters_per_epoch))
     ax.set_yscale('log')
     ax.set_title("Loss(Log scale)")
 
-    if perc_iter is not None:
+    if not np.isnan(perc_iter).all():
         ax = axis[5]
-        ax.plot(x, perc_iter, label="Perceptual Loss", color='green', linewidth=linewidth)
+        line4, = ax.plot(x, perc_iter, label="Perceptual Loss", color='green', linewidth=linewidth)
         ax.set_ylabel("Perceptual Loss")
+
+    if not np.isnan(perc_iter).all():
+        ax.legend(handles=(line1, line2, line4, ))
+    else:
+        ax.legend(handles=(line1, line2, ))
 
     # Linear scale of PSNR, SSIM
     ax = axis[2]
     line1, = ax.plot(x, psnr, label="PSNR", color='blue', linewidth=linewidth)
-    line2, = ax.plot(x, np.repeat(np.amax(psnr), len(x)), linestyle=':', linewidth=linewidth)
+    ax.plot(x, np.repeat(np.amax(psnr), len(x)), linestyle=':', linewidth=linewidth)
     ax.set_xlabel("Epochs(s) / Iteration: {}".format(iters_per_epoch))
     ax.set_ylabel("Average PSNR")
     ax.set_title("Validation Performance")
@@ -612,24 +651,6 @@ def training_curve(train_loss, perc_iter, val_loss, psnr, ssim, x, lr, epoch, it
     ax.legend(handles=(line1, ))
         
     return fig, axis
-
-def grid_show(model: nn.Module, loader: DataLoader, folder, nrow=8, normalize=False):
-    """ Moved to graphs.py """
-    iterator    = iter(loader)
-    data, label = next(iterator)
-    output      = model(data)
-
-    if normalize:
-        data   = data * std[:, None, None] + mean[:, None, None]
-        label  = label * std[:, None, None] + mean[:, None, None]
-        output = output * std[:, None, None] + mean[:, None, None]
-
-    images = torch.cat((data, output, label), axis=0)
-    images = make_grid(images.data, nrow=nrow)
-
-    torchvision.utils.save_image(images, "{}/{}_{}.png".format(epoch, iteration))
-
-    return
 
 def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, iteration, normalize=False):
     """
@@ -719,6 +740,21 @@ if __name__ == "__main__":
     # Make checkpoint storage directory
     name = "{}_{}".format(opt.tag, date.today().strftime("%Y%m%d"))
     os.makedirs(os.path.join(opt.checkpoints, name), exist_ok=True)
+
+    # Copy the code of model to logging file
+    if os.path.exists(os.path.join(opt.detail, name, 'model')):
+        shutil.rmtree(os.path.join(opt.detail, name, 'model'))
+
+    if os.path.exists(os.path.join(opt.checkpoints, name, 'model')):
+        shutil.rmtree(os.path.join(opt.checkpoints, name, 'model'))
+
+    shutil.copytree('./model', os.path.join(opt.detail, name, 'model'))
+    shutil.copytree('./model', os.path.join(opt.checkpoints, name, 'model'))
+    shutil.copyfile(__file__, os.path.join(opt.detail, name, os.path.basename(__file__)))
+
+    # Show Detail
+    print('==========> Training setting')
+    utils.details(opt, os.path.join(opt.detail, name, 'args.txt'))
 
     # Execute main process
     main(opt)

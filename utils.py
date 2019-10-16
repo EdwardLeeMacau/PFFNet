@@ -1,5 +1,11 @@
+"""
+  FileName     [ utils.py ]
+  PackageName  [ PFFNet ]
+  Synopsis     [ Common used function ]
+"""
 import math
 import os
+import random
 from os import listdir
 from os.path import join
 
@@ -15,6 +21,9 @@ std = torch.Tensor([0.229, 0.224, 0.225])
 def selectDevice():
     """ Return the device available in computer """
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def flip_coin(p=0.5):
+    return random.random() < p
 
 def weights_init_kaiming(m):
     """ 
@@ -95,6 +104,7 @@ def get_mean_and_std(dataset: torch.utils.data.Dataset):
 
     mean.div_(len(dataset))
     std.div_(len(dataset))
+
     return mean, std
 
 def saveCheckpoint(checkpoint_path, model: nn.Module, optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.MultiStepLR, epoch, iteration):
@@ -242,7 +252,7 @@ def details(opt, path=None):
                 textfile.write(msg + '\n')
     
     for item, values in vars(opt).items():
-        print("{:16} {}".format(item, values))
+        print("{:24} {}".format(item, values))
             
     return
 
@@ -255,4 +265,5 @@ def readArgs(fname):
     fname : str
         the directory of the text file
     """
+
     return
