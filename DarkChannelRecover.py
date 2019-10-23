@@ -24,12 +24,12 @@ def brightness(img):
     Parameters
     ----------
     img : torch.tensor
-        (batchSize, channel, height, width)
+        Tnesor in shape (batchSize, channel, height, width)
 
     Return
     ------
     intensity : torch.tensor
-        (batchSize, height, width)
+        Tensor in shape (batchSize, height, width)
     """
     return torch.mean(img, dim=1)
 
@@ -37,17 +37,22 @@ def intensity(img):
     """
     Get the intensity of color image.
 
+    Remind: Intensity is not well defined in Image Processin.
+            Using brightness here.
+
     Parameters
     ----------
     img : torch.tensor
-        (batchSize, channel, height, width)
+        Tensor in shape (batchSize, channel, height, width)
 
     Return
     ------
     intensity : torch.tensor
-        (batchSize, height, width)
+        Tensor in shape (batchSize, height, width)
     """
-    return torch.mean(img, dim=1)
+
+    return brightness(img)
+    # return torch.mean(img, dim=1)
 
 def minPooling2d(tensor, kernel_size, max_value=255):
     """ 
@@ -56,17 +61,20 @@ def minPooling2d(tensor, kernel_size, max_value=255):
     Parameters
     ----------
     tensor : torch.tensor
-        (batchSize, channel, height, width)
+        Tensor in shape (batchSize, channel, height, width)
 
     kernel_size : int
+        The pooling size
 
     max_value : int, default=255
+        The maximum value of the image
 
     Return
     ------
     localMin : torch.tensor
-        (batchSize, channel, height, width)
+        Tensor in shape (batchSize, channel, height, width)
     """
+
     return max_value - F.max_pool2d(max_value - tensor, kernel_size=kernel_size, padding=kernel_size // 2, stride=1)
 
 def getMinChannel(img):
@@ -76,10 +84,12 @@ def getMinChannel(img):
     Parameters
     ----------
     img : torch.tensor
+        Tensor in shape (channel, height, width)
 
     Return
     ------
     imgGray : torch.tensor
+        Tensor in shape (height, width)
     """
     if not (len(img.shape) == 3):
         raise ValueError("Image should have 3 dimensions")
@@ -104,7 +114,7 @@ def getDarkChannel(img, blockSize = 3):
     Return
     ------
     imgDark : ndarray
-        Dark Channel, (BatchSize, Height, Width)
+        Tensor in shape (BatchSize, Height, Width)
     """
 
     if len(img.shape) not in (3, 4):
@@ -163,17 +173,21 @@ def getTransmissionMap(img, omega, atmosphericLight, blockSize):
     Parameters
     ----------
     img : torch.tensor
+        (...)
 
     atomsphericLight : torch.tensor
+        (...)
 
     omega : float
+        (...)
 
     blockSize : float
+        (...)
 
     Return
     ------
     transmission : torch.Tensor
-        (batchSize, height, width)
+        Tensor in shape (batchSize, height, width)
     """
     localMin = minPooling2d(img, kernel_size=blockSize, max_value=255)
     transmission = 1 - omega * torch.min(localMin / atmosphericLight[:, :, None, None], dim=1)[0]
@@ -187,12 +201,12 @@ def softMatting(imgMap: torch.Tensor):
     Parameters
     ----------
     imgMap : torch.tensor
-        (batchSize, height, width)
+        Tensor in shape (batchSize, height, width)
 
     Return
     ------
     matted_imgMap : torch.tensor
-        (batchSize, height, width)
+        Tensor in shape (batchSize, height, width)
     """
 
     return

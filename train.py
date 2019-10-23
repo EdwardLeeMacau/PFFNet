@@ -87,6 +87,8 @@ def getOptimizer(model, opt):
 
     Parameters
     ----------
+    model : torch.nn.Model
+
     opt : namespace
 
     Return
@@ -191,6 +193,13 @@ def getFigureSpec(iteration: int, perceptual: bool):
     """
     Get 2x2 Figure And Axis
 
+    Parameters
+    ----------
+    iterations : int
+
+    perceptual : bool
+       If true, generate the axis of perceptual loss
+
     Return
     ------
     fig, axis : matplotlib.figure.Figure, matplotlib.axes.Axes
@@ -231,9 +240,15 @@ def getPerceptualModel(model):
     """ 
     Return the Perceptual Model
 
+    Parameters
+    ----------
+    model : str
+        The name of the perceptual Model.
+
     Return
     ------
     perceptual : {nn.Module, None}
+        Not None if the perceptual model is supported.
     """
     perceptual = None
 
@@ -288,6 +303,30 @@ def getPerceptualModel(model):
 
     return perceptual
 
+def getTrainSpec(opt):
+    """
+    Initialize the objects needs at Training.
+
+    Parameters
+    ----------
+    opt : namespace
+        (...)
+
+    Return
+    ------
+    model
+
+    optimizer
+
+    lr_scheduler
+
+    train_laoder, val_loader
+
+    perceptual
+    """
+
+    return
+
 def main(opt):
     """ 
     Main process of train.py 
@@ -305,7 +344,6 @@ def main(opt):
             torch.cuda.manual_seed(seed)
 
     print("==========> Loading datasets")
-    # TODO: Normalize Layer Handling
     if opt.normalize:
         img_transform = Compose([
             ToTensor(),
@@ -317,24 +355,25 @@ def main(opt):
     # Dataset 
     train_loader, val_loader = getDataset(opt, img_transform)
 
-    # TODO
+    # TODO: Parameters Selection
+    # TODO: Mean shift Layer Handling
     # Load Model
     print("==========> Building model")
     model = ImproveNet(opt.rb)
     
-    # --------------------------------- #
-    # Loss: L1 Norm / L2 Norm           #
-    #   Perceptual Model (Optional)     # 
-    #   TODO Append Layer (Optional)    #
-    # --------------------------------- #
+    # ----------------------------------------------- #
+    # Loss: L1 Norm / L2 Norm                         #
+    #   Perceptual Model (Optional)                   # 
+    #   TODO Append Layer (Optional)                  #
+    # ----------------------------------------------- #
     criterion  = nn.MSELoss(reduction='mean')
     perceptual = None
     if not opt.perceptual is None:
         perceptual = getPerceptualModel(opt.perceptual).eval()
 
-    # --------------------------------------- #
-    # Optimizer and learning rate scheduler   #
-    # --------------------------------------- #
+    # ----------------------------------------------- #
+    # Optimizer and learning rate scheduler           #
+    # ----------------------------------------------- #
     print("==========> Setting Optimizer: {}".format(opt.optimizer))
     optimizer = getOptimizer(model, opt)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=opt.milestones, gamma=opt.gamma)
@@ -349,9 +388,9 @@ def main(opt):
         else:
             raise Exception("=> no checkpoint found at '{}'".format(opt.resume))
 
-    # ------------------------------------------------ #
-    # Option: load the weights from a pretrain network #
-    # ------------------------------------------------ #
+    # ----------------------------------------------- #
+    # Option: load weights from a pretrain network    #
+    # ----------------------------------------------- #
     if opt.pretrained:
         if os.path.isfile(opt.pretrained):
             print("=> loading pretrained model '{}'".format(opt.pretrained))
@@ -359,11 +398,7 @@ def main(opt):
         else:
             raise Exception("=> no pretrained model found at '{}'".format(opt.pretrained))
 
-    # -------------------------------------------------- #
-    # Select training device                             #
-    #   if GPU is available and --cuda -> train with GPU #
-    #   if not --cuda, train with CPU                    #
-    # -------------------------------------------------- #
+    # Select training device
     if opt.cuda:
         print("==========> Setting GPU")
 
@@ -390,27 +425,38 @@ def main(opt):
     lr_iter    = np.empty(0, dtype=float)
     iterations = np.empty(0, dtype=float)
 
-    # -------------------------------------- #
-    # Set plotter to plot the loss curves    #
-    # -------------------------------------- #
+    # Set plotter to plot the loss curves 
     twinx = (opt.perceptual is not None)
     fig, axis = getFigureSpec(len(train_loader), twinx)
 
-    # ------------------------ #
-    # Start training           #
-    # ------------------------ #
+    # Set Model Saving Function
+    if opt.save_item == "model":
+        print("==========> Save Function: saveModel()")
+        saveCheckpoint = utils.saveModel
+    elif opt.save_item == "checkpoint":
+        print("==========> Save Function: saveCheckpoint()")
+        saveCheckpoint = utils.saveCheckpoint
+    else:
+        raise ValueError("Save Checkpoint Function Error")
+
+    # Start Training
     print("==========> Training")
     for epoch in range(opt.starts, opt.epochs + 1):
-        loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, iterations, _, _ = train_val(
+        loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, iterations, _, _ = train(
             model, optimizer, criterion, perceptual, train_loader, val_loader, scheduler, 
-            epoch, loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, iterations, opt, name, fig, axis
+            epoch, loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, 
+            iterations, opt, name, fig, axis, saveCheckpoint
         )
 
         scheduler.step()
 
     return
 
-def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module, perceptual: LossNetwork, train_loader: DataLoader, val_loader: DataLoader, scheduler: optim.lr_scheduler.MultiStepLR, epoch: int, loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, iters, opt, name, fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes):
+def train(model, optimizer, criterion, perceptual, train_loader, val_loader, 
+          scheduler: optim.lr_scheduler.MultiStepLR, epoch: int, loss_iter, 
+          perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, iters, opt, name, 
+          fig: matplotlib.figure.Figure, ax: matplotlib.axes.Axes, 
+          saveCheckpoint=utils.saveCheckpoint):
     """
     Main function of training and vaildation
 
@@ -441,6 +487,9 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
         (...)
     
     fig, ax : matplotlib.figure.Figure, matplotlib.axes.Axes
+        (...)
+
+    saveCheckpoint : callable
         (...)
     """
     trainloss = []
@@ -501,7 +550,7 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
         # 3. Save the model
         if steps % opt.save_interval == 0:
             checkpoint_path = os.path.join(opt.checkpoints, name, "{}.pth".format(steps))
-            utils.saveCheckpoint(checkpoint_path, model, optimizer, scheduler, epoch, iteration)
+            saveCheckpoint(checkpoint_path, model, optimizer, scheduler, epoch, iteration)
         
         # 4. Validating the network
         if steps % opt.val_interval == 0:
@@ -558,7 +607,8 @@ def train_val(model: nn.Module, optimizer: optim.Optimizer, criterion: nn.Module
 
     return loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, iters, fig, ax
 
-def training_curve(train_loss, perc_iter, val_loss, psnr, ssim, x, lr, epoch, iters_per_epoch, fig: matplotlib.figure.Figure, axis: matplotlib.axes.Axes, linewidth=0.25):
+def training_curve(train_loss, perc_iter, val_loss, psnr, ssim, x, lr, epoch, iters_per_epoch, 
+                   fig: matplotlib.figure.Figure, axis: matplotlib.axes.Axes, linewidth=0.25):
     """
     Plot out learning rate, training loss, validation loss and PSNR.
 

@@ -6,19 +6,19 @@
 
 import argparse
 import os
+import shutil
+from datetime import date
 
-from model.rpnet import Net
-import train
 import utils
 import cmdparser
+from model.rpnet import Net
+from model.rpnet import ImproveNet
+from train import getDataset, getOptimizer, getTrainSpec, train 
 
 device = utils.selevtDevice()
 cudnn.benchmark = True
 
-# mean = utils.mean.to(device)
-# std  = utils.std.to(device)
-
-def main():
+def main(opt):
     """
     Main process of train_improve.py
 
@@ -27,6 +27,11 @@ def main():
     opt : namespace
         The option (hyperparameters) of these model
     """
+
+    model, train_loader, val_loader, optimizer, schedular, criterion, _ = getTrainSpec(opt)
+
+    for i in range(1, opt.epochs + 1):    
+        model, optimizer, schedular, criterion, train_loader, val_loader = train(model, optimizer, schedular, criterion, train_loader, val_loader)
 
     return
 
@@ -64,5 +69,19 @@ if __name__ == '__main__':
     # Make checkpoint storage directory
     name = "{}_{}".format(opt.tag, date.today().strftime("%Y%m%d"))
     os.makedirs(os.path.join(opt.checkpoints, name), exist_ok=True)    
+
+    # Copy the code of model to logging file
+    if os.path.exists(os.path.join(opt.detail, name, 'model')):
+        shutil.rmtree(os.path.join(opt.detail, name, 'model'))
+
+    if os.path.exists(os.path.join(opt.checkpoints, name, 'model')):
+        shuitl.rmtree(os.path.join(opt.checkpoints, name, 'model'))
+
+    shutil.copytree('./model', os.path.join(opt.detail, name, 'model'))
+    shutil.copytree('./model', os.path.join(opt.checkpoints, name, 'model'))
+    shutil.copyfile(__file__, os.path.join(opt.detail, name, os.path.basename(__file__)))
+
+    print('==========> Training setting')
+    utils.details(opt, os.path.join(opt.detail, name, 'args.txt'))
 
     main()

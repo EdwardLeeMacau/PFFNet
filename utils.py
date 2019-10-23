@@ -70,15 +70,6 @@ def is_image_file(filename):
 def load_all_image(path):
     return [ join(path, x) for x in listdir(path) if is_image_file(x) ]
 
-class FeatureExtractor(nn.Module):
-    def __init__(self, cnn, feature_layer=11):
-        super(FeatureExtractor, self).__init__()
-        self.features = nn.Sequential(*list(cnn.features.children())[:(feature_layer + 1)])
-
-    def forward(self, x):
-        return self.features(x)
-
-
 def get_mean_and_std(dataset: torch.utils.data.Dataset):
     """
     Return the mean and std value of dataset
@@ -86,11 +77,12 @@ def get_mean_and_std(dataset: torch.utils.data.Dataset):
     Parameters
     ----------
     dataset : torch.utils.data.Dataset
-        dataset instance
+        Dataset instance
 
     Return
     ------
-    mean, std
+    mean, std : np.float64
+        The mean and standard deviation of the dataset.
     """
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=2)
     mean = torch.zeros(3)
@@ -109,22 +101,22 @@ def get_mean_and_std(dataset: torch.utils.data.Dataset):
 
 def saveCheckpoint(checkpoint_path, model: nn.Module, optimizer: optim.Optimizer, scheduler: optim.lr_scheduler.MultiStepLR, epoch, iteration):
     """
+    Save the training instance to .pth file
+
     Parameters
     ----------
-    checkpoint_path : 
+    checkpoint_path : str
         the directory of the model parameter
 
-    model, optimizer, scheduler : 
+    model, optimizer, scheduler : nn.Module, optim.Optimizerm optim_lr_scheduler.MultiStepLR
         the neural network to save
 
-    Return
-    ------
-    model, optimizer, resume_epoch, resume_iteration, scheduler
-    """
-    # state_dict = model.module.state_dict()
-    # for key in state_dict.keys():
-    #     state_dict[key] = state_dict[key].cpu()
+    epoch : int
+        (...)
 
+    iteration : int
+        (...)
+    """
     state = {
         'state_dict': model.state_dict(),
         'optimizer' : optimizer.state_dict(),
@@ -139,9 +131,11 @@ def saveCheckpoint(checkpoint_path, model: nn.Module, optimizer: optim.Optimizer
 
 def loadCheckpoint(checkpoint_path: str, model: nn.Module, optimizer: optim, scheduler: optim.lr_scheduler.MultiStepLR):
     """
+    Load the training instance to .pth file
+
     Parameters
     ----------
-    checkpoint_path :
+    checkpoint_path : str
         the directory of the model parameter
 
     model, optimizer, scheduler : 
@@ -161,7 +155,7 @@ def loadCheckpoint(checkpoint_path: str, model: nn.Module, optimizer: optim, sch
 
     return model, optimizer, resume_epoch, resume_iteration, scheduler
 
-def saveModel(checkpoint_path: str, model: nn.Module):
+def saveModel(checkpoint_path: str, model: nn.Module, *args):
     """
     Save the model's parameters
 
@@ -173,7 +167,10 @@ def saveModel(checkpoint_path: str, model: nn.Module):
     model : torch.nn.Module
         the neural network to save
     """
-    state = {'state_dict': model.state_dict()}
+    state = {
+        'state_dict': model.state_dict()
+    }
+
     torch.save(state, checkpoint_path)
 
     return
@@ -190,7 +187,7 @@ def loadModel(checkpoint_path: str, model: nn.Module, dataparallel=False):
     model : torch.nn.Module
         the neural network to load
     
-    dataparallel : 
+    dataparallel : bool
         If true, the key of the state_dict will have a 'module' prefix, remove it. 
     
     Return

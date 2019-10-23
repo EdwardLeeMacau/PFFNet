@@ -32,6 +32,7 @@ parser.add_argument("--val_interval", default=1000, type=int,  help="step to tes
 parser.add_argument("--log_interval", default=10, type=int, help="interval per iterations to log the message")
 # parser.add_argument("--grad_interval", default=0, type=int, help="interval per iterations to draw the gradient")
 parser.add_argument("--save_interval", default=1000, type=int, help="interval per iterations to save the model")
+parser.add_argument("--save_item", default="model", type=str, choices=("model", "checkpoint"), help="Option: {model, checkpoint}")
 parser.add_argument("--detail", default="./log", type=str, help="the directory to save the training settings")
 
 # Device setting
