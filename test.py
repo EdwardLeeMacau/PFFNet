@@ -10,6 +10,9 @@
 
   2. Use CPU to inference dehazy image
   >>> python test,py --checkpoint <checkpoint_dir>
+
+  3. If the model is need to normalize the image before
+  >>> python test.py --checkpoint <checkpoint_dir> --normalize
 """
 
 import argparse
@@ -23,40 +26,35 @@ import torch.nn as nn
 from torchvision import transforms
 
 import graphs
+from model.net import MeanShift, InverseMeanShift
 from model.rpnet import Net
 from model.rpnet_improve import ImproveNet
 from validate import val as validate
 
-device = utils.selectDevice()
-mean = torch.Tensor([0.485, 0.456, 0.406]).to(device)
-std  = torch.Tensor([0.229, 0.224, 0.225]).to(device)
+# device = utils.selectDevice()
+# mean = torch.Tensor([0.485, 0.456, 0.406]).to(device)
+# std  = torch.Tensor([0.229, 0.224, 0.225]).to(device)
 
-def predict(opt, *args):
+def predict(opt, net, folder, output_folder, device, *args):
     """ 
     Generate the result. 
 
     Parameters
     ----------
-    folder : str 
-
-    output : str
+    folder, output : str
+        Input directory and output directory
 
     net : nn.Module
+        (...)
 
     normalized : bool
-    
+        (...)
     """
-    if not os.path.exists(opt.checkpoint):
-        raise FileNotFoundError("File doesn't exists: {}".format(opt.checkpoint))
-
-    net = utils.loadModel(opt.checkpoint, ImproveNet(opt.rb), dataparallel=True).to(device)
-    net.eval()
+    # net = utils.loadModel(opt.checkpoint, ImproveNet(opt.rb), dataparallel=True).to(device)
+    # net.eval()
         
     # Test photos: Default Reside
     images = utils.load_all_image(opt.hazy)
-
-    # Output photos path
-    os.makedirs(opt.dehazy, exist_ok=True)
 
     if opt.normalize:
         transform = transforms.Compose([
@@ -83,6 +81,7 @@ def predict(opt, *args):
                 im_dehaze = im_dehaze * std[:, None, None] + mean[:, None, None]
         
         # Take the Image out from GPU.
+        im = im.cpu()
         im_dehaze = torch.clamp(im_dehaze, 0., 1.).cpu().data[0]
         im_dehaze = transforms.ToPILImage()(im_dehaze)
 
@@ -92,23 +91,27 @@ def predict(opt, *args):
     return
 
 def main(opt):
-    # ----------------------- # 
-    # Argument Error Handling #
-    # ----------------------- #
-    if not os.path.exists(opt.checkpoint):
-        raise FileNotFoundError("File doesn't exists: {}".format(opt.checkpoint))
+    """ Main process of test.py """
+    # Load Model
+    net = utils.loadModel(opt.checkpoint, ImproveNet(opt.rb)), dataparallel=True)
 
-    # ----------------------- #
-    # Output Folder Setting   #
-    # ----------------------- #
-    tag = os.path.basename(os.path.dirname(opt.checkpoint))
-    checkpoint = os.path.basename(opt.checkpoint).split('.')[0]
-    opt.dehazy = os.path.join(opt.dehazy, tag, checkpoint)
+    if opt.cuda:
+        device = 'gpu'
 
-    utils.details(opt, None)
+    if not opt.cuda:
+        device = 'cpu'
+
+    if opt.normalize:
+        net = nn.Sequential(
+            net, 
+            InverseMeanShift(
+                mean=[0.485, 0.456, 0.406], 
+                std=[0.229, 0.224, 0.225]
+            )
+        ).to(device)
 
     # Inference the images on the test set
-    predict(opt)
+    predict(opt, net, opt.hazy, opt.dehazy, device)
 
     # Measure the performance on the validation set
     # predict(validate)
@@ -137,7 +140,22 @@ if __name__ == '__main__':
     parser.add_argument("--normalize", default=False, action="store_true", help="pre / post normalization of the images")
 
     opt = parser.parse_args()
-    
+
+    # Modify the opt
+    tag = os.path.basename(os.path.dirname(opt.checkpoint))
+    checkpoint = os.path.basename(opt.checkpoint).split('.')[0]
+    opt.dehazy = os.path.join(opt.dehazy, tag, checkpoint)
+
+    # Argument Error Handling
+    if not os.path.exists(opt.checkpoint):
+        raise FileNotFoundError("File doesn't exists: {}".format(opt.checkpoint))
+
+    if not os.path.exists(opt.dehazy):
+        os.makedirs(opt.dehazy)
+
+    if opt.cuda and not torch.cuda.is_available():
+        raise Exception("No GPU found, please run without --cuda")
+
     # Main process
     os.system("clear")
     main(opt)

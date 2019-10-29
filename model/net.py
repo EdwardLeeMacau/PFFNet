@@ -103,11 +103,11 @@ class ResidualBlock(torch.nn.Module):
     Feature:
     - Use self defined ConvLayer(Reflection Padding) Here
     """
-    def __init__(self, channels, ratio=0.1, activation=nn.PReLU(), norm_layer=None):
+    def __init__(self, channels, ratio=0.1, kernel_size=3, activation=nn.PReLU(), norm_layer=None):
         super(ResidualBlock, self).__init__()
 
-        self.conv1 = ConvLayer(channels, channels, kernel_size=3, stride=1, norm_layer=norm_layer)
-        self.conv2 = ConvLayer(channels, channels, kernel_size=3, stride=1, norm_layer=norm_layer)
+        self.conv1 = ConvLayer(channels, channels, kernel_size=kernel_size, stride=1, norm_layer=norm_layer)
+        self.conv2 = ConvLayer(channels, channels, kernel_size=kernel_size, stride=1, norm_layer=norm_layer)
         self.relu  = activation
         self.ratio = ratio
 
@@ -115,7 +115,7 @@ class ResidualBlock(torch.nn.Module):
         residual = x
 
         out = self.relu(self.conv1(x))
-        out = self.conv2(out) * self.ratio
+        out = self.ratio * self.conv2(out)
         out = torch.add(out, residual)
 
         return out

@@ -104,9 +104,20 @@ def val(dehazes, gts, output_path=None):
 
     return psnrs, ssims, index
     
-def main():
-    dehazes = utils.load_all_image(opt.dehaze).sort()
-    gts     = utils.load_all_image(opt.gt).sort()
+def main(opt):
+    if os.path.isdir(opt.dehaze):
+        dehazes = utils.load_all_image(opt.dehaze).sort()
+    elif os.path.isfile(opt.dehaze):
+        dehazes = [ opt.dehaze ]
+
+    if os.path.isdir(opt.gt):
+        gts = utils.load_all_image(opt.gt).sort()
+    elif os.path.isfile(opt.gt):
+        gts = [ opt.gt ]   
+
+
+    if len(dehazes) != len(gts):
+        raise ValueError("The image of dehaze should be equal to GTs, found {} and {}".format(len(dehazes), len(gts)))
 
     val(dehazes, gts, opt.output)
 
@@ -127,6 +138,6 @@ if __name__ == "__main__":
     if not os.path.exists(opt.gt):
         raise ValueError("Directory {} doesn't exists".format(opt.gt))
 
-    utils.detail(opt, None)
+    utils.details(opt, None)
 
     main(opt)
