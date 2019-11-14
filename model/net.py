@@ -46,7 +46,26 @@ class InverseMeanShift(nn.Conv2d):
         self.requires_grad = False
 
 class AbstractConvLayer(nn.Module):
-    pass
+    """
+    - Conv2d(in_channels, out_channels, kernel_size, stride=1)
+    - ConvTransposs2d(in_channels, out_channels, kernel_size, stride=1)
+    """
+    def __init__(self, conv_layer, in_channels, out_channels, kernel_size, 
+                 stride, norm_layer):
+        super(AbstractConvLayer, self).__init__()
+
+        layers = [
+            nn.ReflectionPad2d(kernel_size // 2),
+            conv_layer(in_channels, out_channels, kernel_size, stride),
+        ]
+
+        if norm_layer is not None:
+            layers.append(norm_layer(out_channels))
+
+        self.conv2d = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.conv2d(x)
 
 class ConvLayer(nn.Module):
     """ 
@@ -70,23 +89,28 @@ class ConvLayer(nn.Module):
     Features:
     - Use reflection padding instead of zero padding
     """
-    def __init__(self, in_channels, out_channels, kernel_size, stride, norm_layer=None):
-        super(ConvLayer, self).__init__()
+    def __init__(self, in_channels, out_channels, kernel_size, 
+                 stride, norm_layer):
+        super(ConvLayer, self).__init__(
+            nn.Conv2d, in_channels, out_channels, kernel_size, stride, norm_layer
+        )
+    # def __init__(self, in_channels, out_channels, kernel_size, stride, norm_layer=None):
+    #     super(ConvLayer, self).__init__()
 
-        layers = [
-            nn.ReflectionPad2d(kernel_size // 2),
-            nn.Conv2d(in_channels, out_channels, kernel_size, stride),
-        ]
+    #     layers = [
+    #         nn.ReflectionPad2d(kernel_size // 2),
+    #         nn.Conv2d(in_channels, out_channels, kernel_size, stride),
+    #     ]
 
-        if norm_layer is not None:
-            layers.append(norm_layer(out_channels))
+    #     if norm_layer is not None:
+    #         layers.append(norm_layer(out_channels))
 
-        self.conv2d = nn.Sequential(*layers)
+    #     self.conv2d = nn.Sequential(*layers)
 
-    def forward(self, x):
-        return self.conv2d(x)
+    # def forward(self, x):
+    #     return self.conv2d(x)
 
-class UpsampleConvLayer(torch.nn.Module):
+class UpsampleConvLayer(nn.Module):
     """
     Self-define convolutional transpose layer
 
@@ -108,29 +132,32 @@ class UpsampleConvLayer(torch.nn.Module):
     Features:
     - Use reflection padding instead of zero padding
     """
-    def __init__(self, in_channels, out_channels, kernel_size, stride, norm_layer=None, interpolated=None):
-        super(UpsampleConvLayer, self).__init__()
+    def __init__(self, in_channels, out_channels, kernel_size, 
+                 stride, norm_layer=None, interpolated=None):
+        super(UpsampleConvLayer, self).__init__(
+            nn.ConvTranspose2d, in_channels, out_channels, kernel_size, stride, norm_layer
+        )
 
-        layers = [
-            nn.ReflectionPad2d(kernel_size // 2),
-            nn.ConvTranspose2d(in_channels, out_channels, kernel_size, stride)
-        ]
+    # def __init__(self, in_channels, out_channels, kernel_size, stride, norm_layer=None, interpolated=None):
+    #     super(UpsampleConvLayer, self).__init__()
 
-        if norm_layer is not None:
-            layers.append(norm_layer(out_channels))
+    #     layers = [
+    #         nn.ReflectionPad2d(kernel_size // 2),
+    #         nn.ConvTranspose2d(in_channels, out_channels, kernel_size, stride)
+    #     ]
 
-        if interpolated is not None:
-            pass
+    #     if norm_layer is not None:
+    #         layers.append(norm_layer(out_channels))
 
-        self.convtranspose2d = nn.Sequential(*layers)
+    #     self.convtranspose2d = nn.Sequential(*layers)
 
-    def forward(self, x):
-        return self.convtranspose2d(x)
+    # def forward(self, x):
+    #     return self.convtranspose2d(x)
 
 """ Still Developing """
-class AbstractResidualBlock(torch.nn.Module):
+class AbstractResidualBlock(nn.Module):
     def __init__(self, conv_layer, in_channels, out_channels, ratio, kernel_size, stride, 
-                 activation, norm_layer, interpolated):
+                 activation, norm_layer):
         super(AbstractResidualBlock, self).__init__()
 
         self.conv1 = conv_layer(
@@ -187,8 +214,11 @@ class ResidualBlock(torch.nn.Module):
 
 """ Still Developing """
 class UpsampleResidualBlock(ResidualBlock):
+    """
+    interploated = F.interpolate(res2x, x.size()[2:], mode='bilinear', align_corners=True)
+    """
     def __init__(self, in_channels, out_channels, ratio=0.1, kernel_size=3, stride=1,
-                 activation=nn.PReLU(), norm_layer=None):
+                 activation=nn.PReLU(), norm_layer=None, interpolated=None):
         super(UpsampleResidualBlock, self).__init__(in_channels, out_channels, ratio, kernel_size, stride, activation, norm_layer)
 
         self.conv1 = UpsampleConvLayer(
@@ -212,6 +242,7 @@ class Bottleneck(torch.nn.Module):
         super(Bottleneck, self).__init__()
 
         self.relu  = activation
+        self.ratio = ratio
 
         self.conv1 = ConvLayer(channels, channels, kernel_size=1, stride=1, norm_layer=norm_layer)
         self.bn1   = norm_layer(channels)

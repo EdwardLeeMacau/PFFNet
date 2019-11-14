@@ -1,20 +1,29 @@
-import numpy as np
-import math, cv2
-from scipy import misc
+"""
+  FileName     [ functions.py ]
+  PackageName  [ DarkChannelPrior ]
+  Synophsis    [ ]
+"""
+import math
+
+import cv2
 import matplotlib.pyplot as plt
-from scipy.sparse import *
+import numpy as np
+import numpy.matlib
 import scipy.ndimage as ndimage
 import scipy.sparse.linalg as spla
-import numpy.matlib
+from scipy import misc
+from scipy.sparse import *
 
-def readIm(im=None, ext=None, *args, **kwargs):
-    return cv2.imread(im, 1)
+# TODO: Same as readIm.py
+def readIm(im):
+    return cv2.imread(im, cv2.IMREAD_COLOR)
 
 # TODO: Same as darkChannel.py
-def getDarkChannel(im=None, *args, **kwargs):
-    height, width, __ = im.shape
-    numWindowPixels = 15
+def getDarkChannel(im, numWindowPixels=15):
+    """ Return J^{dark} """
+    height, width, _ = im.shape
     padding = math.ceil(numWindowPixels / 2.0)
+
     J = np.zeros((height,width))
     paddedImage = np.pad(im, (padding, padding), 'constant', constant_values=(np.inf, np.inf))
 
@@ -22,19 +31,22 @@ def getDarkChannel(im=None, *args, **kwargs):
         for i in range(0, width):
             window = paddedImage[j : j + numWindowPixels - 1, i : i + numWindowPixels - 1, :]
             J[j, i] = np.amin(window)
+
     return J
 
 # TODO: Same as atmLight.py 
-def getAtmLight(im=None, JDark=None, *args, **kwargs):
-    height, width, __ = im.shape
+def getAtmLight(im, JDark, top=0.001):
+    height, width, _ = im.shape
     totalPixels = width * height
     
     ImVec = np.reshape(im, (totalPixels, 3))
     indices = np.argsort(np.reshape(JDark, (totalPixels, 1)), axis=0).flatten()
 
-    topPixels = math.floor(totalPixels / 1000.0)
+    # Pick the Top pixels, with the ratio **top**
+    topPixels = math.floor(totalPixels * top)
     indices = indices[-topPixels:]
 
+    # Mean Mode
     tempAtm = np.zeros((1,3))
     for ind in range(0, int(topPixels)):
         tempAtm = tempAtm + ImVec[indices[ind], :]
@@ -43,18 +55,17 @@ def getAtmLight(im=None, JDark=None, *args, **kwargs):
 
     return A.flatten()
 
-def getTransmission(im=None, A=None, *args, **kwargs):
-    omega = 0.95
+# TODO： Same as transmissonEstimate.py
+def getTransmission(im, A, omega=0.95):
     newImage = np.zeros(im.shape)
-    # for ind in xrange(0,3):
+
     for ind in range(0, 3):
         newImage[:, :, ind] = im[:, :, ind] / A[ind]
 
     return 1 - omega * getDarkChannel(newImage)
 
 # TODO: Same as getRadiance.py
-def getRadiance(atmLight=None, im=None, transmission=None, *args, **kwargs):
-    t0 = 0.1
+def getRadiance(atmLight, im, transmission, t0=0.1):
     J = np.zeros(im.shape)
 
     for ind in range(0, 3):
@@ -62,20 +73,17 @@ def getRadiance(atmLight=None, im=None, transmission=None, *args, **kwargs):
 
     return J / np.amax(J)
 
+# TODO: Same as matte.py
 neighbors = []
 neighbor_count = 0;
 
-def performSoftMatting(im=None, transmission=None, *args, **kwargs):
+def performSoftMatting(im, transmission, windowRadius=1, numWindowPixels=9, 
+                       windowWidth=3, epsilon=10**(-8), _lambda=10**(-4)):
     global neighbors
 
-    width, height, depth = im.shape
-    windowRadius = 1
-    numWindowPixels = 9
-    epsilon = 10 ** - 8
-    _lambda = 10 ** - 4
+    width, height, _ = im.shape
 
     totalPixels = numWindowPixels ** 2
-    windowWidth = 3
     windowIndicies = np.reshape(range(1, width * height + 1), (width, height), order='F')
     totalElements = totalPixels * (width - 2) * (height - 2)
     xIndicies = np.ones((1, totalElements))
@@ -84,10 +92,12 @@ def performSoftMatting(im=None, transmission=None, *args, **kwargs):
     count = 0
 
     neighbors = np.empty((width * height, numWindowPixels))
-
     footprint = np.array([[1,1,1],
                           [1,1,1],
                           [1,1,1]])
+    print(footprint.dtype)
+    footprint = np.ones((3, 3))
+    print(footprint.dtype)
 
     ndimage.generic_filter(windowIndicies, getWindow, footprint=footprint)
 
