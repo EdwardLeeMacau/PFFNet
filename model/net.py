@@ -90,7 +90,7 @@ class ConvLayer(AbstractConvLayer):
     - Use reflection padding instead of zero padding
     """
     def __init__(self, in_channels, out_channels, kernel_size, 
-                 stride, norm_layer):
+                 stride, norm_layer=None):
         super(ConvLayer, self).__init__(
             nn.Conv2d, in_channels, out_channels, kernel_size, stride, norm_layer
         )
