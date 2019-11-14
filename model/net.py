@@ -67,7 +67,7 @@ class AbstractConvLayer(nn.Module):
     def forward(self, x):
         return self.conv2d(x)
 
-class ConvLayer(nn.Module):
+class ConvLayer(AbstractConvLayer):
     """ 
     Self-define convolutional layer class
 
@@ -110,7 +110,7 @@ class ConvLayer(nn.Module):
     # def forward(self, x):
     #     return self.conv2d(x)
 
-class UpsampleConvLayer(nn.Module):
+class UpsampleConvLayer(AbstractConvLayer):
     """
     Self-define convolutional transpose layer
 
