@@ -18,23 +18,31 @@ class ImproveNet(nn.Module):
         self.relu = activation
 
         # Convolution Unit
-        self.conv_input = ConvLayer(  3,  32, kernel_size=11, stride=1, norm_layer=nn.BatchNorm2d)
-        self.conv2x     = ConvLayer( 32,  64, kernel_size=3, stride=2, norm_layer=nn.BatchNorm2d)
-        self.conv4x     = ConvLayer( 64, 128, kernel_size=3, stride=2, norm_layer=nn.BatchNorm2d)
-        self.conv8x     = ConvLayer(128, 256, kernel_size=3, stride=2, norm_layer=nn.BatchNorm2d)
-        self.conv16x    = ConvLayer(256, 512, kernel_size=3, stride=2, norm_layer=nn.BatchNorm2d)
+        self.conv_input = ConvLayer(  3,  16, kernel_size=11, stride=1, norm_layer=nn.BatchNorm2d)
+        self.conv2x     = ConvLayer( 16,  32, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
+        self.conv4x     = ConvLayer( 32,  64, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
+        self.conv8x     = ConvLayer( 64, 128, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
+        self.conv16x    = ConvLayer(128, 256, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
 
         # Residual Blocks Unit
         self.dehaze = nn.Sequential()
         for i in range(1, res_blocks + 1):
-            self.dehaze.add_module('res%d' % i, ResidualBlock(channels=512))
+            self.dehaze.add_module(
+                'res%d' % i, 
+                ResidualBlock(
+                    in_channels=256, 
+                    out_channels=256, 
+                    kernel_size=3,
+                    stride=1
+                )
+            )
 
         # ConvolutionTranspose Unit
-        self.convd16x    = UpsampleConvLayer(512, 256, kernel_size=3, stride=2, norm_layer=nn.BatchNorm2d)
-        self.convd8x     = UpsampleConvLayer(256, 128, kernel_size=3, stride=2, norm_layer=nn.BatchNorm2d)
-        self.convd4x     = UpsampleConvLayer(128,  64, kernel_size=3, stride=2, norm_layer=nn.BatchNorm2d)
-        self.convd2x     = UpsampleConvLayer( 64,  32, kernel_size=3, stride=2, norm_layer=nn.BatchNorm2d)
-        self.conv_output = ConvLayer(32, 3, kernel_size=3, stride=1)
+        self.convd16x = UpsampleConvLayer(256, 128, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
+        self.convd8x  = UpsampleConvLayer(128,  64, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
+        self.convd4x  = UpsampleConvLayer( 64,  32, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
+        self.convd2x  = UpsampleConvLayer( 32,  16, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
+        self.conv_output = ConvLayer(16, 3, kernel_size=5, stride=1)
 
     def forward(self, x):
         # Encoder
@@ -71,20 +79,18 @@ class ImproveNet(nn.Module):
         return x
 
 def dimension_testing():
-    device = 'cpu'
-
     model = nn.Sequential(
         MeanShift([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]), 
         ImproveNet(),
         InverseMeanShift([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ).to(device)
+    )
 
     print(model)
 
     x = torch.rand(size=(16, 3, 640, 640), dtype=torch.float32).to(device)
     y = model(x)
 
-    return
+    return True
 
 def main():
     dimension_testing()

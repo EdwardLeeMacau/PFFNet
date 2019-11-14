@@ -2,11 +2,6 @@
   FileName     [ net.py ]
   PackageName  [ PFFNet ]
   Synopsis     [ Basic units of the neural networks ]
-
-  Layers:
-    1. ConvLayer
-    2. UpsampleConvLayer
-    3. ResidualBlocks (BasicBlocks in Residual Net)
 """
 
 import torch
@@ -50,9 +45,27 @@ class InverseMeanShift(nn.Conv2d):
 
         self.requires_grad = False
 
+class AbstractConvLayer(nn.Module):
+    pass
+
 class ConvLayer(nn.Module):
     """ 
-    Self defined convolutional layer class
+    Self-define convolutional layer class
+
+    Output Dimension:
+        (
+            batchsize,
+            out_channel,
+            (Height + kernel_size // 2) / stride + 1,
+            (Width + kennel_size // 2) / stride + 1
+        )
+
+    Example:
+        Input Dimension:
+            (batchsize, 16, 320, 320)
+        Output Dimension:
+            (batchsize, out_channel, (Height + (kernel_size // 2)) / stride + 1, (Width + (kernel_size // 2)) / stride + 1)
+            = (batchsize, 32, 160, 160)
 
     Features:
     - Use reflection padding instead of zero padding
@@ -75,12 +88,27 @@ class ConvLayer(nn.Module):
 
 class UpsampleConvLayer(torch.nn.Module):
     """
-    Self defined convolutional transpose layer class
+    Self-define convolutional transpose layer
+
+    Output Dimension:
+        (
+            batchsize, 
+            out_channels, 
+            height * stride - 2 * padding(0) + kernel_size + output_padding(0), 
+            width * stride - 2 * padding(0) + kernel_size + output_padding(0) 
+        )
+
+    Example:
+        Input Dimension:  
+            (batchsize, in_channels, 40, 40)
+        Output Dimension: 
+            (batchsize, out_channels, (40 + (3 // 2) * 2 - 1) * 2 - 0 + 3 + 0, (40 + (3 // 2) * 2 - 1) * 2 - 0 + 3 + 0)
+            = (batchsize, out_channels, 85, 85)
 
     Features:
     - Use reflection padding instead of zero padding
     """
-    def __init__(self, in_channels, out_channels, kernel_size, stride, norm_layer=None):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, norm_layer=None, interpolated=None):
         super(UpsampleConvLayer, self).__init__()
 
         layers = [
@@ -91,23 +119,60 @@ class UpsampleConvLayer(torch.nn.Module):
         if norm_layer is not None:
             layers.append(norm_layer(out_channels))
 
+        if interpolated is not None:
+            pass
+
         self.convtranspose2d = nn.Sequential(*layers)
 
     def forward(self, x):
         return self.convtranspose2d(x)
 
+""" Still Developing """
+class AbstractResidualBlock(torch.nn.Module):
+    def __init__(self, conv_layer, in_channels, out_channels, ratio, kernel_size, stride, 
+                 activation, norm_layer, interpolated):
+        super(AbstractResidualBlock, self).__init__()
+
+        self.conv1 = conv_layer(
+            in_channels, out_channels, 
+            kernel_size=kernel_size, stride=stride, norm_layer=norm_layer
+        )
+        self.conv2 = conv_layer(
+            out_channels, out_channels,
+            kernel_size=kernel_size, stride=1, norm_layer=norm_layer
+        )
+        self.relu  = activation
+        self.ratio = ratio
+
+    def forward(self, x):
+        residual = x
+
+        out = self.relu(self.conv1(x))
+        out = self.ratio * self.conv2(out)
+        out = torch.add(out, residual)
+
+        return out
+
 class ResidualBlock(torch.nn.Module):
     """ 
-    Self Defined Residual Blocks
+    Self-defined Residual Blocks
 
-    Feature:
-    - Use self defined ConvLayer(Reflection Padding) Here
+    Features:
+    - Use self-define ConvLayer(Reflection Padding)
+    - Stride is 1 for second layer
     """
-    def __init__(self, channels, ratio=0.1, kernel_size=3, activation=nn.PReLU(), norm_layer=None):
+    def __init__(self, in_channels, out_channels, ratio=0.1, kernel_size=3, stride=1,
+                 activation=nn.PReLU(), norm_layer=None):
         super(ResidualBlock, self).__init__()
 
-        self.conv1 = ConvLayer(channels, channels, kernel_size=kernel_size, stride=1, norm_layer=norm_layer)
-        self.conv2 = ConvLayer(channels, channels, kernel_size=kernel_size, stride=1, norm_layer=norm_layer)
+        self.conv1 = ConvLayer(
+            in_channels, out_channels, 
+            kernel_size=kernel_size, stride=stride, norm_layer=norm_layer
+        )
+        self.conv2 = ConvLayer(
+            out_channels, out_channels, 
+            kernel_size=kernel_size, stride=1, norm_layer=norm_layer
+        )
         self.relu  = activation
         self.ratio = ratio
 
@@ -121,12 +186,27 @@ class ResidualBlock(torch.nn.Module):
         return out
 
 """ Still Developing """
+class UpsampleResidualBlock(ResidualBlock):
+    def __init__(self, in_channels, out_channels, ratio=0.1, kernel_size=3, stride=1,
+                 activation=nn.PReLU(), norm_layer=None):
+        super(UpsampleResidualBlock, self).__init__(in_channels, out_channels, ratio, kernel_size, stride, activation, norm_layer)
+
+        self.conv1 = UpsampleConvLayer(
+            in_channels, out_channels,
+            kernel_size=kernel_size, stride=stride, norm_layer=norm_layer
+        )
+        self.conv2 = UpsampleConvLayer(
+            out_channels, out_channels,
+            kernel_size=kernel_size, stride=1, norm_layer=norm_layer
+        )
+
+""" Still Developing """
 class Bottleneck(torch.nn.Module):
     """
-    Self Defined BottleNeck
+    Sel-define BottleNeck
 
     Features
-    - Use self defined ConvLayer(Reflection Padding) Here
+    - Use self-define ConvLayer(Reflection Padding)
     """
     def __init__(self, channels, ratio=0.1, activation=nn.PReLU(), norm_layer=None):
         super(Bottleneck, self).__init__()
@@ -179,7 +259,10 @@ class AggregatedRecurrentResidualUpBlock(torch.nn.Module):
         return out
 
 def dimension_testing():
-    return
+    net = UpsampleResidualBlock(256, 128, 0.1, 3, 1)
+    x   = torch.rand((16, 256, 40, 40))
+    y   = net(x)
+    return True
 
 def main():
     dimension_testing()
