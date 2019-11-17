@@ -237,15 +237,13 @@ def details(opt, path=None):
     path : str, optional
         the path to output textfile
     """
-    makedirs = []
-
     if path is not None:        
         folder = os.path.dirname(path)
         os.makedirs(folder, exist_ok=True)
 
         with open(path, "w") as textfile:
             for item, values in vars(opt).items():
-                msg = "{:16} {}".format(item, values)
+                msg = "{:24} {}".format(item, values)
                 textfile.write(msg + '\n')
     
     for item, values in vars(opt).items():
@@ -262,5 +260,13 @@ def readArgs(fname):
     fname : str
         the directory of the text file
     """
+    with open(fname, 'r') as textfile:
+        texts = textfile.readlines()
 
-    return
+    args = { }
+    
+    for text in texts:
+        text = [ t for t in text.split(' ') if t != '' ]
+        args[text[0]] = text[1]
+
+    return args

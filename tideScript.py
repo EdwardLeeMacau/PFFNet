@@ -2,12 +2,14 @@ import argparse
 import os
 import pandas as pd
 
-def traverseLog(args):
-    tags = os.listdir(args.log)
+import utils
+
+def traverseLog(logpath, number):
+    tags = os.listdir(logpath)
     stat = {}
 
     for tag in tags:
-        fpath = os.path.join(args.log, tag, 'statistical.xlsx')
+        fpath = os.path.join(logpath, tag, 'statistical.xlsx')
     
         if os.path.exists(fpath):
             df = pd.read_excel(fpath).drop_duplicates().astype(
@@ -16,27 +18,25 @@ def traverseLog(args):
                 axis='columns', 
                 labels='Unnamed: 0'
             )
-            stat[tag] = df.nsmallest(args.number, 'ValidationLoss', 'first')
+            stat[tag] = df.nsmallest(number, 'ValidationLoss', 'first')
 
-    if len(stat) > 0:
-        stat = pd.concat(
-            stat.values(), axis=0, keys=stat.keys(), names=['Tags']
-        )
-    else:
+    if len(stat) > 0: 
+        stat = pd.concat(stat.values(), axis=0, keys=stat.keys(), names=['Tags'])
+    else: 
         stat = pd.DataFrame()
 
     return stat 
 
-def traverseOutput(args):
-    tags = os.listdir(args.dir)
+def traverseOutput(outputpath):
+    tags = os.listdir(outputpath)
     stat = {}
 
     for tag in tags:
-        epochs = os.listdir(os.path.join(args.dir, tag))
+        epochs = os.listdir(os.path.join(outputpath, tag))
         
         tmp = {}
         for epoch in epochs:
-            fpath = os.path.join(os.path.join(args.dir, tag, epoch, './record.xlsx'))
+            fpath = os.path.join(os.path.join(outputpath, tag, epoch, './record.xlsx'))
 
             if os.path.exists(fpath):
                 df = pd.read_excel(fpath).rename(
@@ -45,27 +45,20 @@ def traverseOutput(args):
                 tmp[epoch] = df
 
         if len(tmp) > 0:
-            stat[tag] = pd.concat(
-                tmp.values(), axis=0, keys=tmp.keys(), names=['Iterations']
-            )
+            stat[tag] = pd.concat(tmp.values(), axis=0, keys=tmp.keys(), names=['Iterations'])
 
     if len(stat) > 0:
-        stat = pd.concat(
-            stat.values(), axis=0, keys=stat.keys(), names=['Tags']
-        )
+        stat = pd.concat(stat.values(), axis=0, keys=stat.keys(), names=['Tags'])
     else:
         stat = pd.DataFrame()
     
     return stat
 
 def main(args):
-    trainCurve  = traverseLog(args)
+    trainCurve  = traverseLog(args.log, args.number)
     trainCurve.columns = pd.MultiIndex.from_product([['Train'], trainCurve.columns])
 
-    performance = traverseOutput(args).unstack().swaplevel(i=0, j=1, axis='columns').sort_index(1)
-
-    # result = pd.concat([trainCurve, performance], axis='columns')
-    # result = trainCurve.join(performance)
+    performance = traverseOutput(args.dir).unstack().swaplevel(i=0, j=1, axis='columns').sort_index(1)
     
     if args.output is not None:
         with pd.ExcelWriter(args.output) as writer:

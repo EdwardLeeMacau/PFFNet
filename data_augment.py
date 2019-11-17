@@ -171,7 +171,8 @@ if __name__ == "__main__":
     ohazeparser.add_argument('--output', help='Output directory', type=str,
                             default="/media/disk1/EdwardLee/OutdoorTrain")
 
-    utils.detail(opt)
+    args = parser.parse_args()
+    utils.details(args)
 
     # --------------------------------------------------------- #
     # Check folders here, make the directories if don't exist.  #

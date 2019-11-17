@@ -6,6 +6,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class MeanShift(nn.Conv2d):
     """ 
@@ -47,8 +48,13 @@ class InverseMeanShift(nn.Conv2d):
 
 class AbstractConvLayer(nn.Module):
     """
-    - Conv2d(in_channels, out_channels, kernel_size, stride=1)
-    - ConvTransposs2d(in_channels, out_channels, kernel_size, stride=1)
+    Parameters
+    ----------
+    conv_layer : nn.Module
+        option : {
+                    Conv2d(in_channels, out_channels, kernel_size, stride=1), 
+                    ConvTransposs2d(in_channels, out_channels, kernel_size, stride=1)
+                }
     """
     def __init__(self, conv_layer, in_channels, out_channels, kernel_size, 
                  stride, norm_layer):
@@ -83,8 +89,7 @@ class ConvLayer(AbstractConvLayer):
         Input Dimension:
             (batchsize, 16, 320, 320)
         Output Dimension:
-            (batchsize, out_channel, (Height + (kernel_size // 2)) / stride + 1, (Width + (kernel_size // 2)) / stride + 1)
-            = (batchsize, 32, 160, 160)
+            (batchsize, 32, 160, 160)
 
     Features:
     - Use reflection padding instead of zero padding
@@ -94,21 +99,6 @@ class ConvLayer(AbstractConvLayer):
         super(ConvLayer, self).__init__(
             nn.Conv2d, in_channels, out_channels, kernel_size, stride, norm_layer
         )
-    # def __init__(self, in_channels, out_channels, kernel_size, stride, norm_layer=None):
-    #     super(ConvLayer, self).__init__()
-
-    #     layers = [
-    #         nn.ReflectionPad2d(kernel_size // 2),
-    #         nn.Conv2d(in_channels, out_channels, kernel_size, stride),
-    #     ]
-
-    #     if norm_layer is not None:
-    #         layers.append(norm_layer(out_channels))
-
-    #     self.conv2d = nn.Sequential(*layers)
-
-    # def forward(self, x):
-    #     return self.conv2d(x)
 
 class UpsampleConvLayer(AbstractConvLayer):
     """
@@ -126,8 +116,7 @@ class UpsampleConvLayer(AbstractConvLayer):
         Input Dimension:  
             (batchsize, in_channels, 40, 40)
         Output Dimension: 
-            (batchsize, out_channels, (40 + (3 // 2) * 2 - 1) * 2 - 0 + 3 + 0, (40 + (3 // 2) * 2 - 1) * 2 - 0 + 3 + 0)
-            = (batchsize, out_channels, 85, 85)
+            (batchsize, out_channels, 85, 85)
 
     Features:
     - Use reflection padding instead of zero padding
@@ -137,22 +126,6 @@ class UpsampleConvLayer(AbstractConvLayer):
         super(UpsampleConvLayer, self).__init__(
             nn.ConvTranspose2d, in_channels, out_channels, kernel_size, stride, norm_layer
         )
-
-    # def __init__(self, in_channels, out_channels, kernel_size, stride, norm_layer=None, interpolated=None):
-    #     super(UpsampleConvLayer, self).__init__()
-
-    #     layers = [
-    #         nn.ReflectionPad2d(kernel_size // 2),
-    #         nn.ConvTranspose2d(in_channels, out_channels, kernel_size, stride)
-    #     ]
-
-    #     if norm_layer is not None:
-    #         layers.append(norm_layer(out_channels))
-
-    #     self.convtranspose2d = nn.Sequential(*layers)
-
-    # def forward(self, x):
-    #     return self.convtranspose2d(x)
 
 """ Still Developing """
 class AbstractResidualBlock(nn.Module):
@@ -180,7 +153,7 @@ class AbstractResidualBlock(nn.Module):
 
         return out
 
-class ResidualBlock(torch.nn.Module):
+class ResidualBlock(nn.Module):
     """ 
     Self-defined Residual Blocks
 
@@ -213,22 +186,32 @@ class ResidualBlock(torch.nn.Module):
         return out
 
 """ Still Developing """
-class UpsampleResidualBlock(ResidualBlock):
-    """
-    interploated = F.interpolate(res2x, x.size()[2:], mode='bilinear', align_corners=True)
-    """
+class UpsampleResidualBlock(AbstractResidualBlock):
     def __init__(self, in_channels, out_channels, ratio=0.1, kernel_size=3, stride=1,
-                 activation=nn.PReLU(), norm_layer=None, interpolated=None):
-        super(UpsampleResidualBlock, self).__init__(in_channels, out_channels, ratio, kernel_size, stride, activation, norm_layer)
+                 activation=nn.PReLU(), norm_layer=None, interpolate=None):
+        super(UpsampleResidualBlock, self).__init__(
+            UpsampleConvLayer, in_channels, out_channels, ratio, kernel_size, stride, activation, norm_layer
+        )
 
-        self.conv1 = UpsampleConvLayer(
-            in_channels, out_channels,
-            kernel_size=kernel_size, stride=stride, norm_layer=norm_layer
-        )
-        self.conv2 = UpsampleConvLayer(
-            out_channels, out_channels,
-            kernel_size=kernel_size, stride=1, norm_layer=norm_layer
-        )
+        # interploated = F.interpolate(res2x, x.size()[2:], mode='bilinear', align_corners=True)
+        self.interploate = interpolate
+
+    def forward(self, x):
+        residual = x
+
+        # StraightForward Path
+        out = self.conv1(x)
+        if callable(self.interploate): out = self.interploate(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        if callable(self.interploate): out = self.interploate(out)
+        out = self.ratio * self.conv2(out)
+
+        # Residual Path
+        out = torch.add(out, residual)
+
+        return out
 
 """ Still Developing """
 class Bottleneck(torch.nn.Module):
@@ -256,7 +239,7 @@ class Bottleneck(torch.nn.Module):
 
         out = self.relu(self.bn1(self.conv1(x)))
         out = self.relu(self.bn2(self.conv2(x)))
-        out = self.bn3(self.conv3(x)) * ratio
+        out = self.bn3(self.conv3(x)) * self.ratio
 
         out += identity
         out = self.relu(out)
@@ -290,9 +273,14 @@ class AggregatedRecurrentResidualUpBlock(torch.nn.Module):
         return out
 
 def dimension_testing():
-    net = UpsampleResidualBlock(256, 128, 0.1, 3, 1)
-    x   = torch.rand((16, 256, 40, 40))
-    y   = net(x)
+    net = UpsampleResidualBlock(
+        in_channels=256, out_channels=128, ratio=0.1, kernel_size=3, stride=1, 
+        interpolate=lambda x, size: F.interpolate(x, size, mode='bilinear', align_corners=True)
+    )
+
+    x = torch.rand((16, 256, 40, 40))
+    y = net(x)
+
     return True
 
 def main():
