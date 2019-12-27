@@ -8,7 +8,10 @@ import os
 from collections.abc import Container
 
 import torch.utils.data as data
-from PIL import Image
+from PIL import Image, ImageFile
+
+# Set True to load truncated files
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 def is_image_file(filename):
     """ 
@@ -59,8 +62,8 @@ class DatasetFromFolder(data.Dataset):
         self.transform = transform
 
     def __getitem__(self, index):
-        data  = Image.open( self.data_filenames[index] )
-        label = Image.open( self.label_filenames[index] )
+        data  = Image.open(self.data_filenames[index])
+        label = Image.open(self.label_filenames[index])
 
         if self.transform:
             data  = self.transform(data)
@@ -70,3 +73,25 @@ class DatasetFromFolder(data.Dataset):
 
     def __len__(self):
         return len(self.data_filenames)
+
+def main():
+    import cmdparser
+    import torch
+    import torchvision
+    """ Check to load whole dataset. """
+    opt = cmdparser.parser.parse_args()
+    
+    for dirs in (opt.train, opt.val):
+        for directory in dirs:
+            loader = torch.utils.data.DataLoader(
+                DatasetFromFolder(directory, transform=torchvision.transforms.ToTensor()),
+                batch_size=12, num_workers=8
+            )
+
+            for index, (hazy, gt) in enumerate(loader, 1):
+                if (index % 100 == 0): print(directory, "{:4d} / {:4d}".format(index, len(loader)))
+
+    return 
+
+if __name__ == "__main__":
+    main()

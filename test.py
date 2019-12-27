@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
   FileName     [ test.py ]
   PackageName  [ PFFNet ]
@@ -31,9 +30,16 @@ from model.rpnet import Net
 from model.rpnet_improve import ImproveNet
 from validate import val as validate
 
-# device = utils.selectDevice()
-# mean = torch.Tensor([0.485, 0.456, 0.406]).to(device)
-# std  = torch.Tensor([0.229, 0.224, 0.225]).to(device)
+mean = utils.mean
+std = utils.std
+
+def splitImage(img, spec: tuple = (2, 2), boundary: int = 100):
+    imgs = []
+    return imgs
+
+def mergeImage(imgs, spec: tuple = (2, 2), boundary: int = 100):
+    img = None
+    return img
 
 def predict(opt, net, folder, output_folder, device, *args):
     """ 
@@ -49,12 +55,12 @@ def predict(opt, net, folder, output_folder, device, *args):
 
     normalized : bool
         (...)
-    """
-    # net = utils.loadModel(opt.checkpoint, ImproveNet(opt.rb), dataparallel=True).to(device)
-    # net.eval()
-        
+    """ 
     # Test photos: Default Reside
     images = utils.load_all_image(opt.hazy)
+
+    mean = utils.mean.to(device)
+    std = utils.std.to(device)
 
     if opt.normalize:
         transform = transforms.Compose([
@@ -72,16 +78,11 @@ def predict(opt, net, folder, output_folder, device, *args):
         
         print("==========> Input filename: {}".format(filename))
         
-        im = transform(im).view(1, -1, w, h).to(device)
-        
         with torch.no_grad():
+            im = transform(im).view(1, -1, w, h).to(device)
             im_dehaze = net(im)
+            im = im.cpu()
 
-            if opt.normalize:
-                im_dehaze = im_dehaze * std[:, None, None] + mean[:, None, None]
-        
-        # Take the Image out from GPU.
-        im = im.cpu()
         im_dehaze = torch.clamp(im_dehaze, 0., 1.).cpu().data[0]
         im_dehaze = transforms.ToPILImage()(im_dehaze)
 
@@ -93,28 +94,19 @@ def predict(opt, net, folder, output_folder, device, *args):
 def main(opt):
     """ Main process of test.py """
     # Load Model
-    net = utils.loadModel(opt.checkpoint, ImproveNet(opt.rb)), dataparallel=True)
-
-    if opt.cuda:
-        device = 'gpu'
-
-    if not opt.cuda:
-        device = 'cpu'
+    model  = utils.loadModel(opt.checkpoint, ImproveNet(opt.rb), dataparallel=True)
+    device = utils.selectDevice() if opt.cuda and torch.cuda.is_available() else 'cpu'
 
     if opt.normalize:
-        net = nn.Sequential(
-            net, 
-            InverseMeanShift(
-                mean=[0.485, 0.456, 0.406], 
-                std=[0.229, 0.224, 0.225]
-            )
+        model = nn.Sequential(
+            model, InverseMeanShift(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ).to(device)
 
     # Inference the images on the test set
-    predict(opt, net, opt.hazy, opt.dehazy, device)
+    predict(opt, model, opt.hazy, opt.dehazy, device)
 
     # Measure the performance on the validation set
-    # predict(validate)
+    # predict(opt, net, opt.hazy, opt.dehazy, device)
 
     # Measure the performance on the test set
     gts     = sorted(utils.load_all_image(opt.gt))
@@ -133,6 +125,7 @@ if __name__ == '__main__':
     parser.add_argument("--rb", default=18, type=int, help="number of residual blocks")
     parser.add_argument("--checkpoint", type=str, required=True, help="root of model checkpoint")
     parser.add_argument("--hazy", default="./dataset/NTIRE2018_TEST/Hazy", type=str, help="path to load hazy images")
+    # parser.add_argument("--validate", default="./dataset/NTIRE2018_VAL/Hazy", type=str, help="path to load validate images")
     parser.add_argument("--cuda", default=False, action='store_true', help="Use cuda?")
     parser.add_argument("--dehazy", default="./output", type=str, help="path to save output images")
     parser.add_argument("--record", default="inference.xlsx", type=str, help="Write result to spreadsheet")
@@ -158,4 +151,5 @@ if __name__ == '__main__':
 
     # Main process
     os.system("clear")
+    utils.details(opt, None)
     main(opt)

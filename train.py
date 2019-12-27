@@ -189,6 +189,17 @@ def getOptimizer(model, opt):
 
     return optimizer
 
+# TODO: Developing
+def logMsg(epoch, iteration, train_loader, perceptual, trainloss, perceloss)
+    msg = "===> [Epoch {}] [{:4d}/{:4d}] ImgLoss: (Mean: {:.6f}, Std: {:.6f})".format(
+        epoch, iteration, len(train_loader), np.mean(trainloss), np.std(trainloss)
+    )
+
+    if not perceptual is None:
+        msg = "\t".join([msg, "PerceptualLoss: (Mean: {:.6f}, Std: {:.6f})".format(np.mean(perceloss), np.std(perceloss))])
+
+    return msg
+
 def getFigureSpec(iteration: int, perceptual: bool):
     """
     Get 2x2 Figure And Axis
@@ -303,6 +314,7 @@ def getPerceptualModel(model):
 
     return perceptual
 
+# TODO: Developing
 def getTrainSpec(opt):
     """
     Initialize the objects needs at Training.
@@ -344,13 +356,7 @@ def main(opt):
             torch.cuda.manual_seed(seed)
 
     print("==========> Loading datasets")
-    if opt.normalize:
-        img_transform = Compose([
-            ToTensor(),
-            Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
-    else:
-        img_transform = ToTensor()
+    img_transform = Compose([ToTensor(), Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]) if opt.normalize else ToTensor()
 
     # Dataset 
     train_loader, val_loader = getDataset(opt, img_transform)
@@ -367,9 +373,7 @@ def main(opt):
     #   TODO Append Layer (Optional)                  #
     # ----------------------------------------------- #
     criterion  = nn.MSELoss(reduction='mean')
-    perceptual = None
-    if not opt.perceptual is None:
-        perceptual = getPerceptualModel(opt.perceptual).eval()
+    perceptual = None if (opt.perceptual is None) else getPerceptualModel(opt.perceptual).eval()
 
     # ----------------------------------------------- #
     # Optimizer and learning rate scheduler           #
@@ -384,7 +388,7 @@ def main(opt):
     if opt.resume:
         if os.path.isfile(opt.resume):
             print("=> loading checkpoint '{}'".format(opt.resume))
-            model, optimizer, opt.starts, opt.iterations, scheduler = utils.loadCheckpoint(opt.resume, model, optimizer, scheduler)
+            model, optimizer, _, _, scheduler = utils.loadCheckpoint(opt.resume, model, optimizer, scheduler)
         else:
             raise Exception("=> no checkpoint found at '{}'".format(opt.resume))
 
@@ -394,7 +398,7 @@ def main(opt):
     if opt.pretrained:
         if os.path.isfile(opt.pretrained):
             print("=> loading pretrained model '{}'".format(opt.pretrained))
-            model = utils.loadModel(opt.pretrained, model)
+            model = utils.loadModel(opt.pretrained, model, True)
         else:
             raise Exception("=> no pretrained model found at '{}'".format(opt.pretrained))
 
@@ -417,13 +421,22 @@ def main(opt):
             perceptual = perceptual.cpu()
 
     # Create container
-    loss_iter  = np.empty(0, dtype=float)
-    perc_iter  = np.empty(0, dtype=float)
-    psnr_iter  = np.empty(0, dtype=float)
-    ssim_iter  = np.empty(0, dtype=float)
-    mse_iter   = np.empty(0, dtype=float)
-    lr_iter    = np.empty(0, dtype=float)
-    iterations = np.empty(0, dtype=float)
+    length     = opt.epochs * len(train_loader) // opt.val_interval
+    loss_iter  = np.empty(length, dtype=float)
+    perc_iter  = np.empty(length, dtype=float)
+    psnr_iter  = np.empty(length, dtype=float)
+    ssim_iter  = np.empty(length, dtype=float)
+    mse_iter   = np.empty(length, dtype=float)
+    lr_iter    = np.empty(length, dtype=float)
+    iterations = np.empty(length, dtype=float)
+
+    loss_iter[:]  = np.nan
+    perc_iter[:]  = np.nan
+    psnr_iter[:]  = np.nan
+    ssim_iter[:]  = np.nan
+    mse_iter[:]   = np.nan
+    lr_iter[:]    = np.nan
+    iterations[:] = np.nan
 
     # Set plotter to plot the loss curves 
     twinx = (opt.perceptual is not None)
@@ -443,12 +456,17 @@ def main(opt):
     print("==========> Training")
     for epoch in range(opt.starts, opt.epochs + 1):
         loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, iterations, _, _ = train(
-            model, optimizer, criterion, perceptual, train_loader, val_loader, scheduler, 
-            epoch, loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, 
-            iterations, opt, name, fig, axis, saveCheckpoint
+            model, optimizer, criterion, perceptual, train_loader, val_loader, scheduler, epoch, 
+            loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, iterations, 
+            opt, name, fig, axis, saveCheckpoint
         )
 
         scheduler.step()
+
+    # Save the last checkpoint for resume training
+    utils.saveCheckpoint(os.path.join(opt.checkpoints, name, "final.pth"), model, optimizer, scheduler, epoch, len(train_loader))
+
+    # TODO: Fine tuning
 
     return
 
@@ -492,37 +510,94 @@ def train(model, optimizer, criterion, perceptual, train_loader, val_loader,
     saveCheckpoint : callable
         (...)
     """
-    trainloss = []
-    perceloss = []
+    trainloss, perceloss = [], []
 
     for iteration, (data, label) in enumerate(train_loader, 1):
-        model.train()
-        optimizer.zero_grad()
-
         steps = len(train_loader) * (epoch - 1) + iteration
+        model.train()
 
-        data, label = data.to(device), label.to(device)
-        output = model(data)
+        # ----------------------------------------------------- #
+        # Handling:                                             #
+        # 1. Perceptual Loss                                    #
+        # 2. Multiscaling                                       #
+        #    2.0 Without Multiscaling (multiscaling = [1.0])    #
+        #    2.1 Regular Multiscaling                           #
+        #    2.2 Random Multiscaling                            # 
+        # ----------------------------------------------------- # 
+        # 2.0 Without Multiscaling
+        if opt.multiscale == [1.0]:
+            optimizer.zero_grad()
+            data, label = data.to(device), label.to(device)
+            output = model(data)
 
-        # Calculate loss
-        image_loss = criterion(output, label)
+            # Calculate loss
+            image_loss = criterion(output, label)
+            if perceptual is not None: perceptual_loss = perceptual(output, label)
 
-        if perceptual is not None:
-            perceptual_loss = perceptual(output, label)
+            # Backpropagation
+            loss = image_loss if (perceptual is None) else image_loss + opt.perceptual_weight * percuptual_loss
+            loss.backward()
+            optimizer.step()
 
-        # Backpropagation
-        if perceptual is not None:
-            loss = image_loss + opt.perceptual_weight * perceptual_loss
+            # Record the training loss
+            trainloss.append(image_loss.item())
+            if perceptual is not None: perceloss.append(perceptual_loss.item())
+
+        # TODO: Efficient Issue
+        # TODO: Resizing Loss
+        # 2.1 Regular Multiscaling
+        elif not opt.multiscaleShuffle:
+            data, label = data.to(device), label.to(device)
+            
+            originWidth, originHeight = data.shape[1:3]
+            for scale in opt.multiscale:
+                optimizer.zero_grad()
+                if scale != 1.0: 
+                    newSize = (int(originWidth * scale), int(originHeight * scale))
+                    data, label = Resize(size=newSize)(data), Resize(size=newSize)(label)
+                    
+                output = model(data)
+
+                # Calculate loss
+                image_loss = criterion(output, label)
+                if perceptual is not None: perceptual_loss = perceptual(output, label)
+
+                # Backpropagation
+                loss = image_loss if (perceptual is None) else image_loss + opt.perceptual_weight * percuptual_loss
+                loss.backward()
+                optimizer.step()
+
+                # Record the training loss
+                trainloss.append(image_loss.item())
+                if perceptual is not None: perceloss.append(perceptual_loss.item())
+
+        # TODO: Check Usage
+        # 2.2 Random Multiscaling
         else:
-            loss = image_loss
+            optimizer.zero_grad()
+            data, label = data.to(device), label.to(device)
 
-        loss.backward()
-        optimizer.step()
+            originWidth, originHeight = data.shape[1:3]
+            scale = np.random.choice(opt.multiscale, 1)
+            if scale != 1.0:
+                newSize = (int(originWidth * scale), int(originHeight * scale))
+                data, label = Resize(size=newSize)(data), Resize(size=newSize)(label)
 
-        # Record the training loss
-        trainloss.append(image_loss.item())
-        if perceptual is not None:
-            perceloss.append(perceptual_loss.item())
+            output = model(data)
+
+            # Calculate loss
+            image_loss = criterion(output, label)
+            if perceptual is not None: perceptual_loss = perceptual(output, label)
+
+            # Backpropagation
+            loss = image_loss if (perceptual is None) else image_loss + opt.perceptual_weight * percuptual_loss
+            loss.backward()
+            optimizer.step()
+
+            # Record the training loss
+            trainloss.append(image_loss.item())
+            if perceptual is not None: perceloss.append(perceptual_loss.item())
+
 
         # ----------------------------------------------------- #
         # Execute for a period                                  #
@@ -533,14 +608,12 @@ def train(model, optimizer, criterion, perceptual, train_loader, val_loader,
         # ----------------------------------------------------- #
         # 1. Print the training message
         if steps % opt.log_interval == 0:
-            msg = "===> [Epoch {}] [{:4d}/{:4d}] ImgLoss: {:.6f}".format(
-                epoch, iteration, len(train_loader), loss.item()
+            msg = "===> [Epoch {}] [{:4d}/{:4d}] ImgLoss: (Mean: {:.6f}, Std: {:.6f})".format(
+                epoch, iteration, len(train_loader), np.mean(trainloss), np.std(trainloss)
             )
         
             if not perceptual is None:
-                msg = "\t".join([msg, "PerceptualLoss: {:.6f}".format(
-                    perceptual_loss.item())]
-                )
+                msg = "\t".join([msg, "PerceptualLoss: (Mean: {:.6f}, Std: {:.6f})".format(np.mean(perceloss), np.std(perceloss))])
 
             print(msg)
 
@@ -556,21 +629,18 @@ def train(model, optimizer, criterion, perceptual, train_loader, val_loader,
         if steps % opt.val_interval == 0:
             mse, psnr = validate(model, val_loader, criterion, epoch, iteration, normalize=opt.normalize)
 
-            loss_iter = np.append(loss_iter, np.array([np.mean(trainloss)]), axis=0)
-            mse_iter  = np.append(mse_iter, np.array([mse]), axis=0)
-            psnr_iter = np.append(psnr_iter, np.array([psnr]), axis=0)
-            lr_iter   = np.append(lr_iter, np.array([optimizer.param_groups[0]["lr"]]), axis=0)
-            iters     = np.append(iters, np.array([steps / len(train_loader)]), axis=0)
+            idx = steps // opt.val_interval - 1
 
-            if perceptual is None:
-                perc_iter = np.append(perc_iter, np.array([np.nan]), axis=0)
+            loss_iter[idx] = np.mean(trainloss)
+            mse_iter[idx]  = mse
+            psnr_iter[idx] = psnr
+            lr_iter[idx]   = optimizer.param_groups[0]["lr"]
+            iters[idx]     = steps / len(train_loader)
 
-            if not perceptual is None:
-                perc_iter = np.append(perc_iter, np.array([np.mean(perceloss)]), axis=0)
+            if perceptual is not None: perc_iter[idx] = np.mean(perceloss)
 
             # Clean up the list
-            trainloss = []
-            perceloss = []
+            trainloss, preceloss = [], []
 
             # Save the loss
             df = pd.DataFrame(data={
@@ -583,7 +653,6 @@ def train(model, optimizer, criterion, perceptual, train_loader, val_loader,
 
             # Loss (Training Curve) Message
             df = df.nlargest(5, 'ValidationPSNR').append(df)
-
             df.to_excel(os.path.join(opt.detail, name, "statistical.xlsx"))
 
             # Show images in grid with validation set
@@ -591,15 +660,8 @@ def train(model, optimizer, criterion, perceptual, train_loader, val_loader,
                 
             # Plot TrainLoss, ValidationLoss
             fig, ax = training_curve(
-                loss_iter, 
-                perc_iter, 
-                mse_iter, 
-                psnr_iter, 
-                ssim_iter, 
-                iters, 
-                lr_iter, 
-                epoch, len(train_loader), 
-                fig, ax
+                loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, iters, lr_iter, 
+                epoch, len(train_loader), fig, ax
             )
             
             plt.tight_layout()
@@ -633,6 +695,7 @@ def training_curve(train_loss, perc_iter, val_loss, psnr, ssim, x, lr, epoch, it
     """
     # Linear scale of loss curve
     ax = axis[0]
+    ax.clear()
     line1, = ax.plot(x, val_loss, label="Validation Loss", color='red', linewidth=linewidth)
     line2, = ax.plot(x, train_loss, label="Train Loss", color='blue', linewidth=linewidth)
     ax.plot(x, np.repeat(np.amin(val_loss), len(x)), linestyle=':', linewidth=linewidth)
@@ -642,16 +705,15 @@ def training_curve(train_loss, perc_iter, val_loss, psnr, ssim, x, lr, epoch, it
 
     if not np.isnan(perc_iter).all():
         ax = axis[4]
+        ax.clear()
         line4, = ax.plot(x, perc_iter, label="Perceptual Loss", color='green', linewidth=linewidth)
         ax.set_ylabel("Perceptual Loss")
 
-    if not np.isnan(perc_iter).all():
-        ax.legend(handles=(line1, line2, line4, ))
-    else:
-        ax.legend(handles=(line1, line2, ))
+    ax.legend(handles=(line1, line2, line4, )) if not np.isnan(perc_iter).all() else ax.legend(handles=(line1, line2, ))
 
     # Log scale of loss curve
     ax = axis[1]
+    ax.clear()
     line1, = ax.plot(x, val_loss, label="Validation Loss", color='red', linewidth=linewidth)
     line2, = ax.plot(x, train_loss, label="Train Loss", color='blue', linewidth=linewidth)
     ax.plot(x, np.repeat(np.amin(val_loss), len(x)), linestyle=':', linewidth=linewidth)
@@ -661,16 +723,15 @@ def training_curve(train_loss, perc_iter, val_loss, psnr, ssim, x, lr, epoch, it
 
     if not np.isnan(perc_iter).all():
         ax = axis[5]
+        ax.clear()
         line4, = ax.plot(x, perc_iter, label="Perceptual Loss", color='green', linewidth=linewidth)
         ax.set_ylabel("Perceptual Loss")
 
-    if not np.isnan(perc_iter).all():
-        ax.legend(handles=(line1, line2, line4, ))
-    else:
-        ax.legend(handles=(line1, line2, ))
+    ax.legend(handles=(line1, line2, line4, )) if not np.isnan(perc_iter).all() else ax.legend(handles=(line1, line2, ))
 
     # Linear scale of PSNR, SSIM
     ax = axis[2]
+    ax.clear()
     line1, = ax.plot(x, psnr, label="PSNR", color='blue', linewidth=linewidth)
     ax.plot(x, np.repeat(np.amax(psnr), len(x)), linestyle=':', linewidth=linewidth)
     ax.set_xlabel("Epochs(s) / Iteration: {}".format(iters_per_epoch))
@@ -681,6 +742,7 @@ def training_curve(train_loss, perc_iter, val_loss, psnr, ssim, x, lr, epoch, it
 
     # Learning Rate Curve
     ax = axis[3]
+    ax.clear()
     line1, = ax.plot(x, lr, label="Learning Rate", color='cyan', linewidth=linewidth)
     ax.set_xlabel("Epochs(s) / Iteration: {}".format(iters_per_epoch))
     ax.set_title("Learning Rate")
@@ -738,7 +800,7 @@ def validate(model: nn.Module, loader: DataLoader, criterion: nn.Module, epoch, 
             mses.append(mse)
             psnrs.append(psnr)
 
-        print("[Vaild] Epoch: {}, MSE: {:.6f}, PSNR: {:.4f}".format(epoch, np.mean(mses), np.mean(psnrs)))
+        print("===> [Epoch {}] [  Vaild  ] MSE: {:.6f}, PSNR: {:.4f}".format(epoch, np.mean(mses), np.mean(psnrs)))
 
     return np.mean(mses), np.mean(psnrs)
 

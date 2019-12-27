@@ -14,37 +14,39 @@ import utils
 std = utils.std
 mean = utils.mean
 
-def draw_gradient():
+def draw_gradient(model, steps, maxIteration):
     """ 
     Plot the gradient of the training process
     """
-    # (Deprecated)
     # if steps % opt.grad_interval == 0:
     # if opt.grad_interval:
-    #     layer_names, mean, abs_mean, std = [], [], [], []
+    layer_names, mean, abs_mean, std = [], [], [], []
 
-    #     for layer_name, param in model.named_parameters():
-    #         layer_names.append('.'.join(layer_name.split('.')[1:]))
+    for layer_name, param in model.named_parameters():
+        layer_names.append('.'.join(layer_name.split('.')[1:]))
             
-    #         values = param.grad.detach().view(-1).cpu().numpy()
-    #         mean.append(np.mean(values))
-    #         abs_mean.append(np.mean(np.absolute(values)))
-    #         std.append(np.std(values))
+        values = param.grad.detach().view(-1).cpu().numpy()
+        mean.append(np.mean(values))
+        abs_mean.append(np.mean(np.absolute(values)))
+        std.append(np.std(values))
         
-    #     plt.clf()
-    #     plt.figure(figsize=(19.2, 10.8))
-    #     plt.subplot(3, 1, 1)
-    #     plt.bar(np.arange(len(std)), np.asarray(std), 0.5)
-    #     plt.title("STD vs layer")
-    #     plt.subplot(3, 1, 2)
-    #     plt.bar(np.arange(len(mean)), np.asarray(mean), 0.5)
-    #     plt.title("Mean vs layer")
-    #     plt.subplot(3, 1, 3)
-    #     plt.bar(np.arange(len(abs_mean)), np.asarray(abs_mean), 0.5)
-    #     plt.title("Mean(Abs()) vs layer")
-    #     plt.savefig("./{}/{}/grad_{}.png".format(opt.detail, name, str(steps).zfill(len(str(opt.nEpochs * len(train_loader))))))
+    plt.clf()
+    plt.figure(figsize=(19.2, 10.8))
 
-    return    
+    fig, ax = plt.subplots(3, 1, 1)
+    plt.bar(np.arange(len(std)), np.asarray(std), 0.5)
+    plt.title("STD vs layer")
+    plt.subplot(3, 1, 2)
+    plt.bar(np.arange(len(mean)), np.asarray(mean), 0.5)
+    plt.title("Mean vs layer")
+    plt.subplot(3, 1, 3)
+    plt.bar(np.arange(len(abs_mean)), np.asarray(abs_mean), 0.5)
+    plt.title("Mean(Abs()) vs layer")
+
+    fig.savefig(os.path.join(opt.detail, name, "grad_{}.png".format(str(steps).zfill(len(str(maxIteration))))))
+    plt.clf()
+
+    return 
 
 def grid_show(model: nn.Module, loader: DataLoader, folder, nrow=8, normalize=False):
     """

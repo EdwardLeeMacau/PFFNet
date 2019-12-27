@@ -12,12 +12,11 @@ def traverseLog(logpath, number):
         fpath = os.path.join(logpath, tag, 'statistical.xlsx')
     
         if os.path.exists(fpath):
-            df = pd.read_excel(fpath).drop_duplicates().astype(
-                {'Iterations': int}
-            ).set_index('Iterations').drop(
-                axis='columns', 
-                labels='Unnamed: 0'
-            )
+            print("Read {}".format(fpath))
+            df = pd.read_excel(fpath, index_col=0).drop_duplicates()
+            df = df[ df.notnull().any(1) ]
+            df = df.astype({'Iterations': int}).set_index('Iterations')
+
             stat[tag] = df.nsmallest(number, 'ValidationLoss', 'first')
 
     if len(stat) > 0: 
@@ -60,6 +59,8 @@ def main(args):
 
     performance = traverseOutput(args.dir).unstack().swaplevel(i=0, j=1, axis='columns').sort_index(1)
     
+    print(trainCurve)
+
     if args.output is not None:
         with pd.ExcelWriter(args.output) as writer:
             trainCurve.to_excel(writer, sheet_name='Train')

@@ -30,58 +30,96 @@ class ImproveNet(nn.Module):
         self.relu = activation
 
         # Convolution Unit
+
+        # Method: Basic Method
         self.conv_input = ConvLayer(  3,  16, kernel_size=11, stride=1, norm_layer=nn.BatchNorm2d)
         self.conv2x     = ConvLayer( 16,  32, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
         self.conv4x     = ConvLayer( 32,  64, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
         self.conv8x     = ConvLayer( 64, 128, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
         self.conv16x    = ConvLayer(128, 256, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
 
+        # Method: Residual Structure
+        # self.conv_input = ResidualBlock(
+        #       3,  16, kernel_size=11, stride=1, ratio=1, activation=activation, norm_layer=nn.BatchNorm2d
+        # )
+        # self.conv2x     = ResidualBlock(
+        #      16,  32, kernel_size=5, stride=2, ratio=1, activation=activation, norm_layer=nn.BatchNorm2d
+        # )
+        # self.conv4x     = ResidualBlock(
+        #      32,  64, kernel_size=5, stride=2, ratio=1, activation=activation, norm_layer=nn.BatchNorm2d
+        # )
+        # self.conv8x     = ResidualBlock(
+        #      64, 128, kernel_size=5, stride=2, ratio=1, activation=activation, norm_layer=nn.BatchNorm2d
+        # )
+        # self.conv16x    = ResidualBlock(
+        #     128, 256, kernel_size=5, stride=2, ratio=1, activation=activation, norm_layer=nn.BatchNorm2d
+        # )
+
         # Residual Blocks Unit
         self.dehaze = nn.Sequential()
         for i in range(1, res_blocks + 1):
             self.dehaze.add_module(
-                'res%d' % i, 
-                ResidualBlock(
-                    in_channels=256, 
-                    out_channels=256, 
-                    kernel_size=3,
-                    stride=1
-                )
+                'res%d' % i, ResidualBlock(in_channels=256, out_channels=256, kernel_size=3, stride=1)
             )
 
         # ConvolutionTranspose Unit
         
         # Method: Basic Method
-        # self.convd16x = UpsampleConvLayer(256, 128, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
-        # self.convd8x  = UpsampleConvLayer(128,  64, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
-        # self.convd4x  = UpsampleConvLayer( 64,  32, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
-        # self.convd2x  = UpsampleConvLayer( 32,  16, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
+        self.convd16x    = UpsampleConvLayer(256, 128, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
+        self.convd8x     = UpsampleConvLayer(128,  64, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
+        self.convd4x     = UpsampleConvLayer( 64,  32, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
+        self.convd2x     = UpsampleConvLayer( 32,  16, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
+        self.conv_output = ConvLayer(16, 3, kernel_size=11, stride=1)
+
+        # Method: Residual Structure
+        # self.convd16x    = UpsampleResidualBlock(
+        #     256, 128, kernel_size=5, stride=2, ratio=1, activation=activation, norm_layer=nn.BatchNorm2d,
+        #     interpolate=lambda x, size: F.interpolate(x, size, mode="bilinear", align_corners=True)
+        # )
+        # self.convd8x     = UpsampleResidualBlock(
+        #     128,  64, kernel_size=5, stride=2, ratio=1, activation=activation, norm_layer=nn.BatchNorm2d,
+        #     interpolate=lambda x, size: F.interpolate(x, size, mode="bilinear", align_corners=True)
+        # )
+        # self.convd4x     = UpsampleResidualBlock(
+        #      64,  32, kernel_size=5, stride=2, ratio=1, activation=activation, norm_layer=nn.BatchNorm2d,
+        #     interpolate=lambda x, size: F.interpolate(x, size, mode="bilinear", align_corners=True)
+        # )
+        # self.convd2x     = UpsampleResidualBlock(
+        #      32,  16, kernel_size=5, stride=2, ratio=1, activation=activation, norm_layer=nn.BatchNorm2d,
+        #     interpolate=lambda x, size: F.interpolate(x, size, mode="bilinear", align_corners=True)
+        # )
+        # self.conv_output = ResidualBlock(
+        #      16,   3, kernel_size=11, stride=1, ratio=1, activation=activation, norm_layer=nn.BatchNorm2d
+        # ) 
 
         # Method: Hard Tuning
         # self.convd16x = UpsampleConvLayer(512, 128, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
         # self.convd8x  = UpsampleConvLayer(256,  64, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
         # self.convd4x  = UpsampleConvLayer(128,  32, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
         # self.convd2x  = UpsampleConvLayer( 64,  16, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d)
+        # self.conv_output = ConvLayer(16, 3, kernel_size=11, stride=1)
 
         # Method: 1x1 conv
-        self.convd16x = nn.Sequential(
-            nn.Conv2d(512, 256, kernel_size=1, stride=1, norm_layer=nn.BatchNorm2d),
-            UpsampleConvLayer(256, 128, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d),
-        )
-        self.convd8x = nn.Sequential(
-            nn.Conv2d(256, 128, kernel_size=1, stride=1, norm_layer=nn.BatchNorm2d),
-            UpsampleConvLayer(128, 64, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d),
-        )
-        self.convd16x = nn.Sequential(
-            nn.Conv2d(128, 64, kernel_size=1, stride=1, norm_layer=nn.BatchNorm2d),
-            UpsampleConvLayer(64, 32, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d),
-        )
-        self.convd16x = nn.Sequential(
-            nn.Conv2d(64, 32, kernel_size=1, stride=1, norm_layer=nn.BatchNorm2d),
-            UpsampleConvLayer(32, 16, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d),
-        )
-
-        self.conv_output = ConvLayer(16, 3, kernel_size=5, stride=1)
+        # self.convd16x = nn.Sequential(
+        #     nn.Conv2d(512, 256, kernel_size=1, stride=1),
+        #     UpsampleConvLayer(256, 128, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d),
+        # )
+        # self.convd8x = nn.Sequential(
+        #     nn.Conv2d(256, 128, kernel_size=1, stride=1),
+        #     UpsampleConvLayer(128, 64, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d),
+        # )
+        # self.convd4x = nn.Sequential(
+        #     nn.Conv2d(128,  64, kernel_size=1, stride=1),
+        #     UpsampleConvLayer(64, 32, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d),
+        # )
+        # self.convd2x = nn.Sequential(
+        #     nn.Conv2d( 64,  32, kernel_size=1, stride=1),
+        #     UpsampleConvLayer(32, 16, kernel_size=5, stride=2, norm_layer=nn.BatchNorm2d),
+        # )
+        # self.conv_output = nn.Sequential(
+        #     nn.Conv2d( 32, 16, kernel_size=1, stride=1),
+        #     ConvLayer(16, 3, kernel_size=5, stride=1)
+        # )
 
     def forward(self, x):
         # Encoder
@@ -98,28 +136,29 @@ class ImproveNet(nn.Module):
         # res16x = torch.cat((res_dehaze, res16x), 1)
 
         # Decoder
+        # print(res16x.shape)
         res16x = self.relu(self.convd16x(res16x))
         res16x = F.interpolate(res16x, res8x.size()[2:], mode='bilinear', align_corners=True)
-        # res8x  = torch.add(res16x, res8x)
-        res8x = torch.cat((res16x, res8x), 1)
-
+        res8x  = torch.add(res16x, res8x)
+        # res8x = torch.cat((res16x, res8x), 1)
+        # print(res8x.shape)
         res8x  = self.relu(self.convd8x(res8x))
         res8x  = F.interpolate(res8x, res4x.size()[2:], mode='bilinear', align_corners=True)
-        # res4x  = torch.add(res8x, res4x)
-        res4x = torch.cat((res8x, res4x), 1)
-
+        res4x  = torch.add(res8x, res4x)
+        # res4x = torch.cat((res8x, res4x), 1)
+        # print(res4x.shape)
         res4x  = self.relu(self.convd4x(res4x))
         res4x  = F.interpolate(res4x, res2x.size()[2:], mode='bilinear', align_corners=True)
-        # res2x  = torch.add(res4x, res2x)
-        res2x = torch.cat((res4x, res2x), 1)
-
+        res2x  = torch.add(res4x, res2x)
+        # res2x = torch.cat((res4x, res2x), 1)
+        # print(res2x.shape)
         res2x  = self.relu(self.convd2x(res2x))
         res2x  = F.interpolate(res2x, x.size()[2:], mode='bilinear', align_corners=True)
-        # x = torch.add(res2x, x)
-        x = torch.cat((res2x, x), 1)
-
+        x = torch.add(res2x, x)
+        # x = torch.cat((res2x, x), 1)
+        # print(x.shape)
         x = self.conv_output(x)
-
+        # print(x.shape)
         return x
 
 def dimension_testing():

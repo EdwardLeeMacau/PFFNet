@@ -96,13 +96,13 @@ def random_augments(sp):
     
     print("Process %s for %d" % (sp, count_im))
 
-def augments(sp):
+def grid_augments(sp):
     """ Regular crop and rotation Augmentation """
     print("Process %s" % sp)
 
     count_im = 0
     img_hazy = os.path.join(args.hazy, sp)
-    img_gt   = os.path.join(args.gt, '_'.join([sp.split('_')[0], sp.split('_')[1], 'GT' + '.' + sp.split('_')[-1].split('.')[-1]]))
+    img_gt   = img_hazy.replace("hazy", "gt")
 
     raw_im_A = np.asarray(Image.open(img_hazy))
     raw_im_B = np.asarray(Image.open(img_gt))

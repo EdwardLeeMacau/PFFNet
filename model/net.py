@@ -54,7 +54,7 @@ class AbstractConvLayer(nn.Module):
         option : {
                     Conv2d(in_channels, out_channels, kernel_size, stride=1), 
                     ConvTransposs2d(in_channels, out_channels, kernel_size, stride=1)
-                }
+                 }
     """
     def __init__(self, conv_layer, in_channels, out_channels, kernel_size, 
                  stride, norm_layer):
@@ -100,6 +100,16 @@ class ConvLayer(AbstractConvLayer):
             nn.Conv2d, in_channels, out_channels, kernel_size, stride, norm_layer
         )
 
+class Conv1x1(nn.Conv2d):
+    """ 1x1 Convolution Layer """
+    def __init__(self, in_channels, out_channels, stride=1):
+        super(Conv1x1, self).__init__(in_channels, out_channels, kernel_size=1, stride=stride)
+
+class Convd1x1(nn.ConvTranspose2d):
+    """ 1x1 Convolution Transpose Layer """
+    def __init__(self, in_channels, out_channels, stride=1, output_padding=0):
+        super(Convd1x1, self).__init__(in_channels, out_channels, kernel_size=1, stride=stride, output_padding=output_padding)
+
 class UpsampleConvLayer(AbstractConvLayer):
     """
     Self-define convolutional transpose layer
@@ -127,12 +137,12 @@ class UpsampleConvLayer(AbstractConvLayer):
             nn.ConvTranspose2d, in_channels, out_channels, kernel_size, stride, norm_layer
         )
 
-""" Still Developing """
 class AbstractResidualBlock(nn.Module):
     def __init__(self, conv_layer, in_channels, out_channels, ratio, kernel_size, stride, 
                  activation, norm_layer):
         super(AbstractResidualBlock, self).__init__()
 
+        # StrightForward Path
         self.conv1 = conv_layer(
             in_channels, out_channels, 
             kernel_size=kernel_size, stride=stride, norm_layer=norm_layer
@@ -141,11 +151,15 @@ class AbstractResidualBlock(nn.Module):
             out_channels, out_channels,
             kernel_size=kernel_size, stride=1, norm_layer=norm_layer
         )
-        self.relu  = activation
-        self.ratio = ratio
+
+        # Other Params
+        self.skip   = None
+        self.relu   = activation
+        self.ratio  = ratio
+        self.stride = stride
 
     def forward(self, x):
-        residual = x
+        residual = self.skip(x) if callable(self.skip) else x
 
         out = self.relu(self.conv1(x))
         out = self.ratio * self.conv2(out)
@@ -153,60 +167,57 @@ class AbstractResidualBlock(nn.Module):
 
         return out
 
-class ResidualBlock(nn.Module):
+class ResidualBlock(AbstractResidualBlock):
     """ 
     Self-defined Residual Blocks
 
     Features:
     - Use self-define ConvLayer(Reflection Padding)
-    - Stride is 1 for second layer
+    - Stride = 1 for second layer
     """
     def __init__(self, in_channels, out_channels, ratio=0.1, kernel_size=3, stride=1,
                  activation=nn.PReLU(), norm_layer=None):
-        super(ResidualBlock, self).__init__()
-
-        self.conv1 = ConvLayer(
-            in_channels, out_channels, 
-            kernel_size=kernel_size, stride=stride, norm_layer=norm_layer
+        super(ResidualBlock, self).__init__(
+            ConvLayer, in_channels, out_channels, ratio, kernel_size, stride,
+            activation, norm_layer
         )
-        self.conv2 = ConvLayer(
-            out_channels, out_channels, 
-            kernel_size=kernel_size, stride=1, norm_layer=norm_layer
-        )
-        self.relu  = activation
-        self.ratio = ratio
 
-    def forward(self, x):
-        residual = x
+        self.skip   = None if (in_channels == out_channels) else Conv1x1(in_channels, out_channels, stride=stride)
+        self.stride = stride
 
-        out = self.relu(self.conv1(x))
-        out = self.ratio * self.conv2(out)
-        out = torch.add(out, residual)
-
-        return out
-
-""" Still Developing """
 class UpsampleResidualBlock(AbstractResidualBlock):
+    """
+    Self-defined Upsample Residual Blocks
+
+    Features:
+    - Use self-define UpsampleConvLayer(Reflection Padding)
+    - Stride = 1 for second layer
+    - Interpolated Function
+    """
     def __init__(self, in_channels, out_channels, ratio=0.1, kernel_size=3, stride=1,
                  activation=nn.PReLU(), norm_layer=None, interpolate=None):
         super(UpsampleResidualBlock, self).__init__(
-            UpsampleConvLayer, in_channels, out_channels, ratio, kernel_size, stride, activation, norm_layer
+            UpsampleConvLayer, in_channels, out_channels, ratio, kernel_size, stride, 
+            activation, norm_layer
         )
 
-        # interploated = F.interpolate(res2x, x.size()[2:], mode='bilinear', align_corners=True)
-        self.interploate = interpolate
+        self.skip   = None if (in_channels == out_channels) else Convd1x1(in_channels, out_channels, stride=stride, output_padding=stride-1)
+        self.stride = stride
+        self.interpolate = interpolate
 
     def forward(self, x):
-        residual = x
+        target_shape = (torch.tensor(x.shape[2:]) * self.stride).tolist()
+        
+        residual = self.skip(x) if callable(self.skip) else x
 
         # StraightForward Path
         out = self.conv1(x)
-        if callable(self.interploate): out = self.interploate(out)
+        if callable(self.interpolate): out = self.interpolate(out, target_shape)
         out = self.relu(out)
 
         out = self.conv2(out)
-        if callable(self.interploate): out = self.interploate(out)
-        out = self.ratio * self.conv2(out)
+        if callable(self.interpolate): out = self.interpolate(out, target_shape)
+        out = self.ratio * out
 
         # Residual Path
         out = torch.add(out, residual)
@@ -274,11 +285,16 @@ class AggregatedRecurrentResidualUpBlock(torch.nn.Module):
 
 def dimension_testing():
     net = UpsampleResidualBlock(
-        in_channels=256, out_channels=128, ratio=0.1, kernel_size=3, stride=1, 
+        in_channels=256, out_channels=128, ratio=0.1, kernel_size=3, stride=2, 
         interpolate=lambda x, size: F.interpolate(x, size, mode='bilinear', align_corners=True)
     )
 
     x = torch.rand((16, 256, 40, 40))
+    y = net(x)
+
+    net = ResidualBlock(
+        in_channels=128, out_channels=256, ratio=0.1, kernel_size=3, stride=2,
+    )
     y = net(x)
 
     return True
