@@ -327,17 +327,133 @@ def getTrainSpec(opt):
     Return
     ------
     model
-
+    
     optimizer
-
-    lr_scheduler
-
-    train_laoder, val_loader
-
+    
+    criterion
+    
     perceptual
+    
+    train_loader, val_loader
+    
+    scheduler
+    
+    epoch, 
+    
+    loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter
+    
+    iterations, opt, 
+    
+    name, 
+    
+    fig, 
+    
+    axis, 
+    
+    saveCheckpoint
     """
+    if opt.fixrandomseed:
+        seed = 1334
+        torch.manual_seed(seed)
+        if opt.cuda: torch.cuda.manual_seed(seed)
 
-    return
+    print("==========> Loading datasets")
+    img_transform = Compose([ToTensor(), Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]) if opt.normalize else ToTensor()
+
+    # Dataset 
+    train_loader, val_loader = getDataset(opt, img_transform)
+
+    # TODO: Parameters Selection
+    # TODO: Mean shift Layer Handling
+    # Load Model
+    print("==========> Building model")
+    model = ImproveNet(opt.rb)
+    
+    # ----------------------------------------------- #
+    # Loss: L1 Norm / L2 Norm                         #
+    #   Perceptual Model (Optional)                   # 
+    #   TODO Append Layer (Optional)                  #
+    # ----------------------------------------------- #
+    criterion  = nn.MSELoss(reduction='mean')
+    perceptual = None if (opt.perceptual is None) else getPerceptualModel(opt.perceptual).eval()
+
+    # ----------------------------------------------- #
+    # Optimizer and learning rate scheduler           #
+    # ----------------------------------------------- #
+    print("==========> Setting Optimizer: {}".format(opt.optimizer))
+    optimizer = getOptimizer(model, opt)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=opt.milestones, gamma=opt.gamma)
+
+    # ----------------------------------------------- #
+    # Option: resume training process from checkpoint #
+    # ----------------------------------------------- #
+    if opt.resume:
+        if os.path.isfile(opt.resume):
+            print("=> loading checkpoint '{}'".format(opt.resume))
+            model, optimizer, _, _, scheduler = utils.loadCheckpoint(opt.resume, model, optimizer, scheduler)
+        else:
+            raise Exception("=> no checkpoint found at '{}'".format(opt.resume))
+
+    # ----------------------------------------------- #
+    # Option: load weights from a pretrain network    #
+    # ----------------------------------------------- #
+    if opt.pretrained:
+        if os.path.isfile(opt.pretrained):
+            print("=> loading pretrained model '{}'".format(opt.pretrained))
+            model = utils.loadModel(opt.pretrained, model, True)
+        else:
+            raise Exception("=> no pretrained model found at '{}'".format(opt.pretrained))
+
+    # Select training device
+    if opt.cuda:
+        print("==========> Setting GPU")
+        model = nn.DataParallel(model, device_ids=[i for i in range(opt.gpus)]).cuda()
+        criterion = criterion.cuda()
+        if perceptual is not None: perceptual = perceptual.cuda()
+
+    else:
+        print("==========> Setting CPU")
+        model = model.cpu()
+        criterion = criterion.cpu()
+        if perceptual is not None: perceptual = perceptual.cpu()
+
+    # Create container
+    length     = opt.epochs * len(train_loader) // opt.val_interval
+    loss_iter  = np.empty(length, dtype=float)
+    perc_iter  = np.empty(length, dtype=float)
+    psnr_iter  = np.empty(length, dtype=float)
+    ssim_iter  = np.empty(length, dtype=float)
+    mse_iter   = np.empty(length, dtype=float)
+    lr_iter    = np.empty(length, dtype=float)
+    iterations = np.empty(length, dtype=float)
+
+    loss_iter[:]  = np.nan
+    perc_iter[:]  = np.nan
+    psnr_iter[:]  = np.nan
+    ssim_iter[:]  = np.nan
+    mse_iter[:]   = np.nan
+    lr_iter[:]    = np.nan
+    iterations[:] = np.nan
+
+    # Set plotter to plot the loss curves 
+    twinx = (opt.perceptual is not None)
+    fig, axis = getFigureSpec(len(train_loader), twinx)
+
+    # Set Model Saving Function
+    if opt.save_item == "model":
+        print("==========> Save Function: saveModel()")
+        saveCheckpoint = utils.saveModel
+    elif opt.save_item == "checkpoint":
+        print("==========> Save Function: saveCheckpoint()")
+        saveCheckpoint = utils.saveCheckpoint
+    else:
+        raise ValueError("Save Checkpoint Function Error")
+
+    return (
+        model, optimizer, criterion, perceptual, train_loader, val_loader, scheduler, epoch, 
+        loss_iter, perc_iter, mse_iter, psnr_iter, ssim_iter, lr_iter, iterations, opt, 
+        name, fig, axis, saveCheckpoint
+    )
 
 def main(opt):
     """ 
