@@ -47,8 +47,8 @@ parser.add_argument("--fixrandomseed", default=False, help="train with fix rando
 parser.add_argument("--resume", type=str, help="Path to checkpoint.")
 
 # Dataloader setting
-parser.add_argument("--train", default=["./dataset/NTIRE2018"], type=str, nargs='+', help="path of training dataset")
-parser.add_argument("--val", default=["./dataset/NTIRE2018_VAL"], type=str, nargs='+', help="path of validation dataset")
+parser.add_argument("--train", default=["../dataset/NTIRE2018"], type=str, nargs='+', help="path of training dataset")
+parser.add_argument("--val", default=["../dataset/NTIRE2018_VAL"], type=str, nargs='+', help="path of validation dataset")
 
 if __name__ == "__main__":
     import utils
